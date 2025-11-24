@@ -4,7 +4,7 @@ import graphviz
 import matplotlib.pyplot as plt
 import requests
 from datetime import datetime
-from streamlit_sortable import sortable
+from streamlit-sortable import sortable
 
 # -------------------------------
 # 頁面設定與樣式
