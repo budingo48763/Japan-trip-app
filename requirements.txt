@@ -1,0 +1,6 @@
+streamlit
+pandas
+graphviz
+matplotlib       # 畫圖用
+altair           # 更美的視覺化圖表
+openpyxl         # 若未來要處理 Excel
