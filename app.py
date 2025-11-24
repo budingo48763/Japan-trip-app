@@ -6,9 +6,17 @@ import requests
 from datetime import datetime
 from streamlit-sortable import sortable
 
-# -------------------------------
+# 類別樣式與 emoji
+category_style = {
+    "餐飲": {"color": "lightcoral", "emoji": "🍽️"},
+    "交通": {"color": "lightskyblue", "emoji": "🚄"},
+    "門票": {"color": "lightgreen", "emoji": "🎫"},
+    "購物": {"color": "khaki", "emoji": "🛍️"},
+    "住宿": {"color": "plum", "emoji": "🛏️"},
+    "其他": {"color": "lightgray", "emoji": "📌"}
+}
+
 # 頁面設定與樣式
-# -------------------------------
 st.set_page_config(page_title="旅日小幫手 🇯🇵", page_icon="🌸", layout="wide")
 
 st.markdown("""
@@ -143,7 +151,16 @@ if not st.session_state.expenses.empty:
 else:
     st.info("目前還沒有消費紀錄，快去買買買吧！")
 
-        # 初始行程資料
+# -------------------------------
+# 多日行程 + 拖拉排序 + 分析
+# -------------------------------
+st.header("📅 多日行程規劃")
+
+if "trip_data" not in st.session_state:
+    st.session_state.trip_data = {f"Day {i}": [] for i in range(1, 8)}
+
+selected_day = st.selectbox("選擇行程日", list(st.session_state.trip_data.keys()))
+
 if not st.session_state.trip_data[selected_day]:
     st.session_state.trip_data[selected_day] = [
         {"時間": "07:00", "地點": "相鐵FRESA INN", "備註": "起床 & 早餐", "金額": 0, "類別": "餐飲", "地圖": "https://maps.google.com/?q=相鐵FRESA INN"},
@@ -151,10 +168,8 @@ if not st.session_state.trip_data[selected_day]:
         {"時間": "10:30", "地點": "高島城跡", "備註": "城堡遺跡，營業至16:30", "金額": 500, "類別": "門票", "地圖": "https://maps.google.com/?q=高島城跡"}
     ]
 
-# 拖拉排序
 sorted_items = sortable(items=st.session_state.trip_data[selected_day], item_key="地點", direction="vertical")
 
-# 編輯介面
 for i, item in enumerate(sorted_items):
     with st.expander(f"📝 編輯：{item['時間']} {item['地點']}"):
         item["時間"] = st.text_input("時間", value=item["時間"], key=f"time_{selected_day}_{i}")
@@ -169,10 +184,27 @@ st.session_state.trip_data[selected_day] = sorted_items
 st.divider()
 st.markdown("### 🎨 行程流程圖 + 記帳分析")
 
-# 流程圖
+# 行程流程圖
 flow = graphviz.Digraph()
 flow.attr(rankdir='TB')
 for i, item in enumerate(sorted_items):
     style = category_style.get(item["類別"], category_style["其他"])
     label = f"{style['emoji']} {item['時間']}\\n{item['地點']}\\n{item['備註']}\\n¥{item['金額']}"
-flow.node(str(i), label, style='filled', color=style["color"], fontname="Microsoft JhengHei", URL=item["地圖"], target="_blank")
+    flow.node(str(i), label, style='filled', color=style["color"], fontname="Microsoft JhengHei")
+    if i > 0:
+        flow.edge(str(i-1), str(i))
+st.graphviz_chart(flow)
+
+# 記帳明細表格
+df = pd.DataFrame(sorted_items)
+st.subheader("📋 記帳明細")
+st.dataframe(df, use_container_width=True)
+
+# 類別統計長條圖
+st.subheader("📊 類別消費比例")
+chart_data = df.groupby("類別")["金額"].sum()
+st.bar_chart(chart_data)
+
+# 圓餅圖分析
+fig, ax = plt.subplots()
+ax.pie(chart_data, labels=chart_data.index, autopct='%
