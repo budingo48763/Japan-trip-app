@@ -175,4 +175,4 @@ flow.attr(rankdir='TB')
 for i, item in enumerate(sorted_items):
     style = category_style.get(item["類別"], category_style["其他"])
     label = f"{style['emoji']} {item['時間']}\\n{item['地點']}\\n{item['備註']}\\n¥{item['金額']}"
-    flow.node(str(i), label, style='filled', color=style["color"], fontname="Microsoft JhengHei", URL=item
+flow.node(str(i), label, style='filled', color=style["color"], fontname="Microsoft JhengHei", URL=item["地圖"], target="_blank")
