@@ -1,0 +1,6 @@
+streamlit
+pandas
+graphviz
+matplotlib
+requests
+streamlit-sortable
