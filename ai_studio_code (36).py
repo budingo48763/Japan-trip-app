@@ -119,6 +119,8 @@ def add_expense_callback(item_id, day_num):
 
 def get_single_map_link(location):
     if not location: return "#"
+    # 如果是 http 開頭直接回傳，否則產生搜尋連結
+    if location.startswith("http"): return location
     return f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(location)}"
 
 def generate_google_map_route(items):
@@ -215,9 +217,10 @@ if "flight_info" not in st.session_state:
     }
 
 if "hotel_info" not in st.session_state:
+    # 預設使用搜尋連結，確保可使用
     st.session_state.hotel_info = [
-        {"id": 1, "name": "KOKO HOTEL 京都", "range": "D1-D3 (3泊)", "date": "1/17 - 1/19", "addr": "京都府京都市...", "link": "https://goo.gl/maps/example"},
-        {"id": 2, "name": "相鐵 FRESA INN 大阪", "range": "D4-D5 (2泊)", "date": "1/20 - 1/21", "addr": "大阪府大阪市...", "link": "https://goo.gl/maps/example"}
+        {"id": 1, "name": "KOKO HOTEL 京都", "range": "D1-D3 (3泊)", "date": "1/17 - 1/19", "addr": "京都府京都市...", "link": "https://www.google.com/maps/search/?api=1&query=KOKO+HOTEL+Kyoto"},
+        {"id": 2, "name": "相鐵 FRESA INN 大阪", "range": "D4-D5 (2泊)", "date": "1/20 - 1/21", "addr": "大阪府大阪市...", "link": "https://www.google.com/maps/search/?api=1&query=Sotetsu+Fresa+Inn+Osaka"}
     ]
 
 default_checklist = {
@@ -231,22 +234,28 @@ if "checklist" not in st.session_state or not isinstance(st.session_state.checkl
 
 TRANSPORT_OPTIONS = ["🚆 電車", "🚌 巴士", "🚶 步行", "🚕 計程車", "🚗 自駕", "🚢 船", "✈️ 飛機"]
 
-# 🌍 旅遊生存會話庫
+# 🌍 擴充的旅遊生存會話庫
 SURVIVAL_PHRASES = {
     "日本": {
         "招呼": [("你好", "こんにちは (Konnichiwa)"), ("謝謝", "ありがとう (Arigatou)"), ("不好意思", "すみません (Sumimasen)")],
-        "點餐": [("請給我這個", "これをください (Kore wo kudasai)"), ("買單", "お会計お願いします (Okaikei onegaishimasu)"), ("好", "はい (Hai)")],
-        "交通": [("...在哪裡？", "…はどこですか？ (... wa doko desuka?)"), ("車站", "駅 (Eki)"), ("廁所", "トイレ (Toire)")]
+        "點餐": [("請給我這個", "これをください (Kore wo kudasai)"), ("買單", "お会計お願いします (Okaikei onegaishimasu)"), ("多少錢？", "いくらですか (Ikura desuka?)"), ("有推薦的嗎？", "おすすめは？ (Osusume wa?)")],
+        "交通": [("...在哪裡？", "…はどこですか？ (... wa doko desuka?)"), ("車站", "駅 (Eki)"), ("廁所", "トイレ (Toire)"), ("這班車到...嗎？", "これは...に行きますか？ (Kore wa ... ni ikimasuka?)")],
+        "購物": [("可以試穿嗎？", "試着してもいいですか (Shichaku shitemo ii desuka)"), ("有免稅嗎？", "免税できますか (Menzei dekimasuka)"), ("請給我袋子", "袋をください (Fukuro wo kudasai)")],
+        "緊急": [("救命", "助けて (Tasukete)"), ("我身體不舒服", "具合が悪いです (Guai ga warui desu)"), ("我不見了", "迷子になりました (Maigo ni narimashita)")]
     },
     "韓國": {
         "招呼": [("你好", "안녕하세요 (Annyeonghaseyo)"), ("謝謝", "감사합니다 (Gamsahamnida)"), ("不好意思", "저기요 (Jeogiyo)")],
-        "點餐": [("請給我這個", "이거 주세요 (Igeo juseyo)"), ("買單", "계산해 주세요 (Gyesan-hae juseyo)"), ("好", "네 (Ne)")],
-        "交通": [("...在哪裡？", "... 어디에요? (... eodieyo?)"), ("車站", "역 (Yeok)"), ("洗手間", "화장실 (Hwajangsil)")]
+        "點餐": [("請給我這個", "이거 주세요 (Igeo juseyo)"), ("買單", "계산해 주세요 (Gyesan-hae juseyo)"), ("好", "네 (Ne)"), ("請不要太辣", "안 맵게 해 주세요 (An maepge hae juseyo)")],
+        "交通": [("...在哪裡？", "... 어디에요? (... eodieyo?)"), ("車站", "역 (Yeok)"), ("洗手間", "화장실 (Hwajangsil)"), ("去...怎麼走？", "... 어떻게 가요? (... eotteoke gayo?)")],
+        "購物": [("多少錢？", "얼마예요? (Eolmayeyo?)"), ("可以打折嗎？", "깎아 주세요 (Kkakka juseyo)"), ("有這個尺寸嗎？", "이 사이즈 있어요? (I saijeu isseoyo?)")],
+        "緊急": [("救命", "도와주세요 (Dowajuseyo)"), ("痛", "아파요 (Apayo)"), ("警察", "경찰 (Gyeongchal)")]
     },
     "泰國": {
         "招呼": [("你好", "Sawasdee khrup/kha"), ("謝謝", "Khop khun khrup/kha"), ("對不起", "Kho thot khrup/kha")],
-        "點餐": [("我要這個", "Ao an nee"), ("多少錢", "Tao rai?"), ("不辣", "Mai pet")],
-        "交通": [("去...", "Bai ..."), ("廁所", "Hong nam"), ("機場", "Sanam bin")]
+        "點餐": [("我要這個", "Ao an nee"), ("多少錢", "Tao rai?"), ("不辣", "Mai pet"), ("好吃", "Aroi")],
+        "交通": [("去...", "Bai ..."), ("廁所", "Hong nam"), ("機場", "Sanam bin"), ("直走", "Dtrong bai")],
+        "購物": [("太貴了", "Paeng mak"), ("可以便宜點嗎", "Lot noi dai mai?"), ("有別的顏色嗎", "Mee see eun mai?")],
+        "緊急": [("救命", "Chuay duay"), ("醫生", "Mor"), ("去醫院", "Bai rong paya ban")]
     }
 }
 
@@ -372,7 +381,7 @@ for d in range(1, st.session_state.trip_days_count + 1):
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 行程", "🗺️ 路線", "🎒 清單", "ℹ️ 資訊", "🧰 工具"])
 
 # ==========================================
-# 1. 行程規劃 (恢復交通資訊 & 預算面板)
+# 1. 行程規劃
 # ==========================================
 with tab1:
     selected_day_num = st.radio("DaySelect", list(range(1, st.session_state.trip_days_count + 1)), 
@@ -383,7 +392,7 @@ with tab1:
     current_items = st.session_state.trip_data[selected_day_num]
     current_items.sort(key=lambda x: x['time'])
     
-    # --- 📊 預算儀表板 (New Feature) ---
+    # --- 📊 預算儀表板 ---
     all_cost = sum([item.get('cost', 0) for item in current_items])
     all_actual = sum([sum(x['price'] for x in item.get('expenses', [])) for item in current_items])
     
@@ -425,8 +434,17 @@ with tab1:
         clean_note = item["note"].replace('\n', '<br>')
         note_div = f'<div style="font-size:0.85rem; color:{current_theme["sub"]}; background:{current_theme["bg"]}; padding:8px; border-radius:8px; margin-top:8px; line-height:1.4;">📝 {clean_note}</div>' if item['note'] and not is_edit_mode else ""
         
+        # --- 記帳項目顯示 (修復) ---
+        expense_details_html = ""
+        if item.get('expenses'):
+            # 建立小字列表 HTML
+            rows = ""
+            for exp in item['expenses']:
+                 rows += f"<div style='display:flex; justify-content:space-between; font-size:0.8rem; color:#888; margin-top:2px;'><span>{exp['name']}</span><span>¥{exp['price']:,}</span></div>"
+            expense_details_html = f"<div style='margin-top:8px; padding-top:5px; border-top:1px dashed {current_theme['secondary']}; opacity:0.8;'>{rows}</div>"
+
         # 卡片 HTML
-        card_content = f"""<div style="display:flex; gap:15px; margin-bottom:0px;"><div style="display:flex; flex-direction:column; align-items:center; width:50px;"><div style="font-weight:700; color:{current_theme['text']}; font-size:1.1rem;">{item['time']}</div><div style="flex-grow:1; width:2px; background:{current_theme['secondary']}; margin:5px 0; opacity:0.3; border-radius:2px;"></div></div><div style="flex-grow:1;"><div class="apple-card" style="margin-bottom:0px;"><div style="display:flex; justify-content:space-between; align-items:flex-start;"><div class="apple-title" style="margin-top:0;">{item['title']}</div>{cost_display}</div><div class="apple-loc">📍 {item['loc'] or '未設定'} {map_btn}</div>{note_div}</div></div></div>"""
+        card_content = f"""<div style="display:flex; gap:15px; margin-bottom:0px;"><div style="display:flex; flex-direction:column; align-items:center; width:50px;"><div style="font-weight:700; color:{current_theme['text']}; font-size:1.1rem;">{item['time']}</div><div style="flex-grow:1; width:2px; background:{current_theme['secondary']}; margin:5px 0; opacity:0.3; border-radius:2px;"></div></div><div style="flex-grow:1;"><div class="apple-card" style="margin-bottom:0px;"><div style="display:flex; justify-content:space-between; align-items:flex-start;"><div class="apple-title" style="margin-top:0;">{item['title']}</div>{cost_display}</div><div class="apple-loc">📍 {item['loc'] or '未設定'} {map_btn}</div>{note_div}{expense_details_html}</div></div></div>"""
         st.markdown(card_content, unsafe_allow_html=True)
 
         if is_edit_mode:
@@ -444,11 +462,21 @@ with tab1:
                 cx2.number_input("金額", min_value=0, key=f"new_exp_p_{item['id']}", label_visibility="collapsed")
                 cx3.button("➕", key=f"add_{item['id']}", on_click=add_expense_callback, args=(item['id'], selected_day_num))
                 
-                if st.button("🗑️ 刪除", key=f"del_{item['id']}"):
+                # 移除記帳項目
+                if item.get('expenses'):
+                    with st.expander("管理細項"):
+                         for i_ex, ex in enumerate(item['expenses']):
+                             c_d1, c_d2 = st.columns([3,1])
+                             c_d1.text(f"{ex['name']} ¥{ex['price']}")
+                             if c_d2.button("刪", key=f"del_exp_{item['id']}_{i_ex}"):
+                                 item['expenses'].pop(i_ex)
+                                 st.rerun()
+
+                if st.button("🗑️ 刪除行程", key=f"del_{item['id']}"):
                     st.session_state.trip_data[selected_day_num].pop(index)
                     st.rerun()
         
-        # --- 交通資訊 (Restored) ---
+        # --- 交通資訊 ---
         if index < len(current_items) - 1:
             t_mode = item.get('trans_mode', '📍 移動')
             t_min = item.get('trans_min', 30)
@@ -458,14 +486,9 @@ with tab1:
                  item['trans_mode'] = ct1.selectbox("交通", TRANSPORT_OPTIONS, key=f"trm_{item['id']}")
                  item['trans_min'] = ct2.number_input("分", value=t_min, step=5, key=f"trmin_{item['id']}")
             else:
-                 # 交通資訊 HTML：左側保持時間軸線，右側顯示膠囊
                  trans_html = f"""<div style="display:flex; gap:15px;"><div style="display:flex; flex-direction:column; align-items:center; width:50px;"><div style="flex-grow:1; width:2px; border-left:2px dashed {current_theme['secondary']}; margin:0; opacity:0.6;"></div></div><div style="flex-grow:1; padding:10px 0;"><span class="trans-badge">{t_mode} 約 {t_min} 分</span></div></div>"""
                  st.markdown(trans_html, unsafe_allow_html=True)
 
-
-    if current_items:
-        route_url = generate_google_map_route(current_items)
-        st.markdown(f"<div style='text-align:center; margin-top:20px; margin-bottom:40px;'><a href='{route_url}' target='_blank' style='background:{current_theme['primary']}; color:white; padding:12px 30px; border-radius:30px; text-decoration:none; font-weight:bold; box-shadow:0 4px 10px rgba(0,0,0,0.2);'>🚗 開啟 Google Maps 導航</a></div>", unsafe_allow_html=True)
 
 # ==========================================
 # 2. 路線全覽
@@ -476,6 +499,10 @@ with tab2:
     map_items = sorted(st.session_state.trip_data[map_day], key=lambda x: x['time'])
     
     if map_items:
+        # --- Google Maps 導航按鈕 (Moved Here) ---
+        route_url = generate_google_map_route(map_items)
+        st.markdown(f"<div style='text-align:center; margin-bottom:20px;'><a href='{route_url}' target='_blank' style='background:{current_theme['primary']}; color:white; padding:12px 30px; border-radius:30px; text-decoration:none; font-weight:bold; box-shadow:0 4px 10px rgba(0,0,0,0.2);'>🚗 開啟 Google Maps 導航</a></div>", unsafe_allow_html=True)
+
         t_html = ['<div class="map-tl-container">']
         for item in map_items:
             icon = get_category_icon(item.get('cat', 'other'))
@@ -520,8 +547,6 @@ with tab3:
     st.markdown("---")
     country = st.session_state.target_country
     st.markdown(f"### 🌍 當地旅遊資訊 ({country})")
-    # ... (Info logic truncated for brevity, same as before) ...
-    # 這裡為了簡潔直接保留資訊顯示
     c_info1, c_info2 = st.columns(2)
     with c_info1:
         st.info(f"**🌤️ 氣候建議**\n\n請根據上方智能推薦準備。")
@@ -531,24 +556,60 @@ with tab3:
         st.error(f"**💴 小費**\n\n日本無小費文化。")
 
 # ==========================================
-# 4. 重要資訊
+# 4. 重要資訊 (優化編輯按鈕)
 # ==========================================
 with tab4:
-    st.subheader("✈️ 航班")
+    col_info_1, col_info_2 = st.columns([3, 1])
+    col_info_1.subheader("✈️ 航班")
+    edit_info_mode = col_info_2.toggle("✏️ 編輯資訊")
+
     flights = st.session_state.flight_info
-    out_f, in_f = flights["outbound"], flights["inbound"]
     
-    st.markdown(f"""<div class="info-card"><div class="info-header"><span>📅 {out_f['date']}</span> <span>✈️ {out_f['code']}</span></div><div class="info-time">{out_f['dep']} -> {out_f['arr']}</div><div class="info-loc"><span>📍 {out_f['dep_loc']}</span> <span style="margin:0 5px;">✈</span> <span>{out_f['arr_loc']}</span></div><div style="text-align:right; margin-top:5px;"><span class="info-tag">去程</span></div></div>""", unsafe_allow_html=True)
-    st.markdown(f"""<div class="info-card"><div class="info-header"><span>📅 {in_f['date']}</span> <span>✈️ {in_f['code']}</span></div><div class="info-time">{in_f['dep']} -> {in_f['arr']}</div><div class="info-loc"><span>📍 {in_f['dep_loc']}</span> <span style="margin:0 5px;">✈</span> <span>{in_f['arr_loc']}</span></div><div style="text-align:right; margin-top:5px;"><span class="info-tag">回程</span></div></div>""", unsafe_allow_html=True)
+    # 航班顯示
+    for f_key, f_label in [("outbound", "去程"), ("inbound", "回程")]:
+        f_data = flights[f_key]
+        if edit_info_mode:
+            with st.container(border=True):
+                st.caption(f"編輯 {f_label}")
+                c1, c2 = st.columns(2)
+                f_data["date"] = c1.text_input("日期", f_data["date"], key=f"fd_{f_key}")
+                f_data["code"] = c2.text_input("航班", f_data["code"], key=f"fc_{f_key}")
+                f_data["dep"] = c1.text_input("起飛", f_data["dep"], key=f"ft1_{f_key}")
+                f_data["arr"] = c2.text_input("抵達", f_data["arr"], key=f"ft2_{f_key}")
+                f_data["dep_loc"] = c1.text_input("起飛地", f_data["dep_loc"], key=f"fl1_{f_key}")
+                f_data["arr_loc"] = c2.text_input("抵達地", f_data["arr_loc"], key=f"fl2_{f_key}")
+        
+        # 航班 HTML
+        st.markdown(f"""<div class="info-card"><div class="info-header"><span>📅 {f_data['date']}</span> <span>✈️ {f_data['code']}</span></div><div class="info-time">{f_data['dep']} -> {f_data['arr']}</div><div class="info-loc"><span>📍 {f_data['dep_loc']}</span> <span style="margin:0 5px;">✈</span> <span>{f_data['arr_loc']}</span></div><div style="text-align:right; margin-top:5px;"><span class="info-tag">{f_label}</span></div></div>""", unsafe_allow_html=True)
 
     st.divider()
     st.subheader("🏨 住宿")
-    for hotel in st.session_state.hotel_info:
-        hotel_html = f"""<div class="info-card" style="border-left: 5px solid {current_theme['primary']};"><div class="info-header"><span class="info-tag" style="background:{current_theme['primary']}; color:white;">{hotel['range']}</span><span>{hotel['date']}</span></div><div style="font-size:1.3rem; font-weight:900; color:{current_theme['text']}; margin: 10px 0;">{hotel['name']}</div><div class="info-loc" style="margin-bottom:10px;">📍 {hotel['addr']}</div><a href="{hotel['link']}" target="_blank" style="text-decoration:none; color:{current_theme['primary']}; font-size:0.9rem; font-weight:bold; border:1px solid {current_theme['primary']}; padding:4px 12px; border-radius:20px;">🗺️ 地圖</a></div>"""
+    
+    if edit_info_mode:
+        if st.button("➕ 新增住宿"):
+            st.session_state.hotel_info.append({"id": int(time.time()), "name": "新飯店", "range": "D1-D2", "date": "", "addr": "", "link": ""})
+            st.rerun()
+
+    for i, hotel in enumerate(st.session_state.hotel_info):
+        if edit_info_mode:
+            with st.expander(f"編輯: {hotel['name']}", expanded=True):
+                hotel['name'] = st.text_input("飯店名稱", hotel['name'], key=f"hn_{hotel['id']}")
+                hotel['range'] = st.text_input("天數 (例如 D1-D3)", hotel['range'], key=f"hr_{hotel['id']}")
+                hotel['date'] = st.text_input("日期範圍", hotel['date'], key=f"hd_{hotel['id']}")
+                hotel['addr'] = st.text_input("地址", hotel['addr'], key=f"ha_{hotel['id']}")
+                hotel['link'] = st.text_input("地圖連結 (留空自動生成)", hotel['link'], key=f"hl_{hotel['id']}")
+                if st.button("🗑️ 刪除", key=f"del_h_{hotel['id']}"):
+                    st.session_state.hotel_info.pop(i)
+                    st.rerun()
+
+        # 確保地圖連結有效
+        map_url = get_single_map_link(hotel['link']) if hotel['link'] else get_single_map_link(hotel['name'])
+        
+        hotel_html = f"""<div class="info-card" style="border-left: 5px solid {current_theme['primary']};"><div class="info-header"><span class="info-tag" style="background:{current_theme['primary']}; color:white;">{hotel['range']}</span><span>{hotel['date']}</span></div><div style="font-size:1.3rem; font-weight:900; color:{current_theme['text']}; margin: 10px 0;">{hotel['name']}</div><div class="info-loc" style="margin-bottom:10px;">📍 {hotel['addr']}</div><a href="{map_url}" target="_blank" style="text-decoration:none; color:{current_theme['primary']}; font-size:0.9rem; font-weight:bold; border:1px solid {current_theme['primary']}; padding:4px 12px; border-radius:20px;">🗺️ 地圖</a></div>"""
         st.markdown(hotel_html, unsafe_allow_html=True)
 
 # ==========================================
-# 5. 實用工具 (New Feature)
+# 5. 實用工具
 # ==========================================
 with tab5:
     st.header("🧰 實用工具")
