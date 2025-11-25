@@ -609,11 +609,12 @@ with tab4:
         st.markdown(hotel_html, unsafe_allow_html=True)
 
 # ==========================================
-# 5. 實用工具
+# 5. 實用工具 (功能擴充版)
 # ==========================================
 with tab5:
     st.header("🧰 實用工具")
     
+    # --- 1. 匯率計算機 (原有) ---
     st.subheader("💴 匯率與退稅計算")
     col_calc1, col_calc2 = st.columns(2)
     amount = col_calc1.number_input("輸入外幣金額", min_value=0, step=100)
@@ -621,17 +622,103 @@ with tab5:
     col_calc2.metric("約合台幣", f"NT$ {int(twd_val):,}")
     
     if amount > 0:
-        tax_refund = amount / 1.1  # 假設 10% 消費稅
+        tax_refund = amount / 1.1
         refund_val = amount - tax_refund
         st.caption(f"若為含稅價 (10%)，未稅價約為 {int(tax_refund):,}，可退稅額約 {int(refund_val):,}")
 
     st.divider()
+
+    # --- 2. 🛍️ 伴手禮與代購清單 (新增功能) ---
+    st.subheader("🛍️ 伴手禮與代購清單")
     
+    if "shopping_list" not in st.session_state:
+        st.session_state.shopping_list = pd.DataFrame(
+            columns=["對象", "商品名稱", "預算(¥)", "已購買"]
+        )
+
+    # 使用 Data Editor 讓使用者直接編輯表格
+    edited_df = st.data_editor(
+        st.session_state.shopping_list,
+        num_rows="dynamic",
+        column_config={
+            "已購買": st.column_config.CheckboxColumn(
+                "已購買",
+                help="買到了嗎？",
+                default=False,
+            ),
+            "預算(¥)": st.column_config.NumberColumn(
+                "預算(¥)",
+                format="¥%d"
+            )
+        },
+        use_container_width=True,
+        key="editor_shopping"
+    )
+    
+    # 自動儲存變更
+    if not edited_df.equals(st.session_state.shopping_list):
+        st.session_state.shopping_list = edited_df
+        st.rerun()
+
+    # 簡易統計
+    if not edited_df.empty:
+        total_shop_budget = edited_df["預算(¥)"].sum()
+        bought_count = edited_df["已購買"].sum()
+        total_count = len(edited_df)
+        st.caption(f"購物總預算: ¥{total_shop_budget:,} ｜ 進度: {bought_count}/{total_count}")
+
+    st.divider()
+
+    # --- 3. 🆘 緊急求助卡 (新增功能) ---
+    st.subheader("🆘 緊急求助卡")
+    st.caption("遇到緊急狀況時，請向當地人出示此畫面")
+
+    sos_situations = {
+        "日本": {
+            "迷路": ("我想去這裡，請告訴我怎麼走。", "ここに行きたいです。行き方を教えてください。"),
+            "過敏": ("我有食物過敏，不能吃海鮮/花生。", "食物アレルギーがあります。海鮮類/ピーナッツは食べられません。"),
+            "受傷": ("我受傷了，請帶我去醫院。", "怪我をしました。病院に連れて行ってください。"),
+            "遺失": ("我的錢包/護照不見了。", "財布/パスポートをなくしました。"),
+            "飯店": ("請帶我去這家飯店。", "このホテルまでお願いします。")
+        },
+        "韓國": {
+            "迷路": ("我想去這裡，請告訴我怎麼走。", "여기로 가고 싶어요. 가는 방법을 알려주세요."),
+            "過敏": ("我有食物過敏。", "음식 알레르기가 있어요."),
+            "受傷": ("我受傷了，請帶我去醫院。", "다쳤어요. 병원으로 데려가 주세요."),
+            "遺失": ("我的護照不見了。", "여권을 잃어버렸어요."),
+            "飯店": ("請帶我去這家飯店。", "이 호텔로 가주세요.")
+        },
+        "泰國": {
+            "迷路": ("我想去這裡", "Yak bai tee nee"),
+            "過敏": ("我對海鮮過敏", "Phom/Chan pae a-han ta-lay"),
+            "受傷": ("送我去醫院", "Pa bai rong pa-ya-ban noi"),
+            "遺失": ("我護照不見了", "Nang sue doen tang hai"),
+            "飯店": ("去這家飯店", "Bai rong ram nee")
+        }
+    }
+
+    target_sos = st.session_state.target_country
+    if target_sos in sos_situations:
+        sos_type = st.selectbox("緊急狀況類型", list(sos_situations[target_sos].keys()))
+        sos_text = sos_situations[target_sos][sos_type]
+        
+        # 顯示大字卡
+        st.markdown(f"""
+        <div style="background:#FF4B4B; color:white; padding:20px; border-radius:15px; text-align:center; box-shadow:0 4px 15px rgba(0,0,0,0.2);">
+            <div style="font-size:1rem; opacity:0.9; margin-bottom:10px;">{sos_text[0]}</div>
+            <div style="font-size:1.8rem; font-weight:900; line-height:1.4;">{sos_text[1]}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.info("目前僅支援 日/韓/泰 求助卡。")
+
+    st.divider()
+    
+    # --- 4. 旅遊生存會話 (原有) ---
     st.subheader("🗣️ 旅遊生存會話")
-    target = st.session_state.target_country
     if target in SURVIVAL_PHRASES:
         phrases = SURVIVAL_PHRASES[target]
-        cat_select = st.selectbox("選擇情境", list(phrases.keys()))
+        cat_select = st.selectbox("選擇會話情境", list(phrases.keys()))
         
         for p in phrases[cat_select]:
             st.markdown(f"""
@@ -640,5 +727,3 @@ with tab5:
                 <div style="font-size:1.2rem; font-weight:bold; color:{current_theme['text']};">{p[1]}</div>
             </div>
             """, unsafe_allow_html=True)
-    else:
-        st.info("目前僅支援 日本、韓國、泰國 之會話。")
