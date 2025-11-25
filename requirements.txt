@@ -7,3 +7,5 @@ pandas
 openpyxl
 streamlit-cropper
 pillow
+gspread
+oauth2client
