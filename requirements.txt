@@ -3,3 +3,7 @@ pandas
 graphviz
 matplotlib
 requests
+pandas
+openpyxl
+streamlit-cropper
+pillow
