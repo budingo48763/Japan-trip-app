@@ -119,7 +119,6 @@ def add_expense_callback(item_id, day_num):
 
 def get_single_map_link(location):
     if not location: return "#"
-    # 如果是 http 開頭直接回傳，否則產生搜尋連結
     if location.startswith("http"): return location
     return f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(location)}"
 
@@ -217,7 +216,6 @@ if "flight_info" not in st.session_state:
     }
 
 if "hotel_info" not in st.session_state:
-    # 預設使用搜尋連結，確保可使用
     st.session_state.hotel_info = [
         {"id": 1, "name": "KOKO HOTEL 京都", "range": "D1-D3 (3泊)", "date": "1/17 - 1/19", "addr": "京都府京都市...", "link": "https://www.google.com/maps/search/?api=1&query=KOKO+HOTEL+Kyoto"},
         {"id": 2, "name": "相鐵 FRESA INN 大阪", "range": "D4-D5 (2泊)", "date": "1/20 - 1/21", "addr": "大阪府大阪市...", "link": "https://www.google.com/maps/search/?api=1&query=Sotetsu+Fresa+Inn+Osaka"}
@@ -437,7 +435,6 @@ with tab1:
         # --- 記帳項目顯示 (修復) ---
         expense_details_html = ""
         if item.get('expenses'):
-            # 建立小字列表 HTML
             rows = ""
             for exp in item['expenses']:
                  rows += f"<div style='display:flex; justify-content:space-between; font-size:0.8rem; color:#888; margin-top:2px;'><span>{exp['name']}</span><span>¥{exp['price']:,}</span></div>"
@@ -499,7 +496,7 @@ with tab2:
     map_items = sorted(st.session_state.trip_data[map_day], key=lambda x: x['time'])
     
     if map_items:
-        # --- Google Maps 導航按鈕 (Moved Here) ---
+        # --- Google Maps 導航按鈕 ---
         route_url = generate_google_map_route(map_items)
         st.markdown(f"<div style='text-align:center; margin-bottom:20px;'><a href='{route_url}' target='_blank' style='background:{current_theme['primary']}; color:white; padding:12px 30px; border-radius:30px; text-decoration:none; font-weight:bold; box-shadow:0 4px 10px rgba(0,0,0,0.2);'>🚗 開啟 Google Maps 導航</a></div>", unsafe_allow_html=True)
 
@@ -556,7 +553,7 @@ with tab3:
         st.error(f"**💴 小費**\n\n日本無小費文化。")
 
 # ==========================================
-# 4. 重要資訊 (優化編輯按鈕)
+# 4. 重要資訊
 # ==========================================
 with tab4:
     col_info_1, col_info_2 = st.columns([3, 1])
@@ -602,19 +599,18 @@ with tab4:
                     st.session_state.hotel_info.pop(i)
                     st.rerun()
 
-        # 確保地圖連結有效
         map_url = get_single_map_link(hotel['link']) if hotel['link'] else get_single_map_link(hotel['name'])
         
         hotel_html = f"""<div class="info-card" style="border-left: 5px solid {current_theme['primary']};"><div class="info-header"><span class="info-tag" style="background:{current_theme['primary']}; color:white;">{hotel['range']}</span><span>{hotel['date']}</span></div><div style="font-size:1.3rem; font-weight:900; color:{current_theme['text']}; margin: 10px 0;">{hotel['name']}</div><div class="info-loc" style="margin-bottom:10px;">📍 {hotel['addr']}</div><a href="{map_url}" target="_blank" style="text-decoration:none; color:{current_theme['primary']}; font-size:0.9rem; font-weight:bold; border:1px solid {current_theme['primary']}; padding:4px 12px; border-radius:20px;">🗺️ 地圖</a></div>"""
         st.markdown(hotel_html, unsafe_allow_html=True)
 
 # ==========================================
-# 5. 實用工具 (功能擴充版)
+# 5. 實用工具
 # ==========================================
 with tab5:
     st.header("🧰 實用工具")
     
-    # --- 1. 匯率計算機 (原有) ---
+    # 1. 匯率計算機
     st.subheader("💴 匯率與退稅計算")
     col_calc1, col_calc2 = st.columns(2)
     amount = col_calc1.number_input("輸入外幣金額", min_value=0, step=100)
@@ -628,55 +624,39 @@ with tab5:
 
     st.divider()
 
-    # --- 2. 🛍️ 伴手禮與代購清單 (新增功能) ---
+    # 2. 購物清單
     st.subheader("🛍️ 伴手禮與代購清單")
-    
     if "shopping_list" not in st.session_state:
-        st.session_state.shopping_list = pd.DataFrame(
-            columns=["對象", "商品名稱", "預算(¥)", "已購買"]
-        )
+        st.session_state.shopping_list = pd.DataFrame(columns=["對象", "商品名稱", "預算(¥)", "已購買"])
 
-    # 使用 Data Editor 讓使用者直接編輯表格
     edited_df = st.data_editor(
         st.session_state.shopping_list,
         num_rows="dynamic",
         column_config={
-            "已購買": st.column_config.CheckboxColumn(
-                "已購買",
-                help="買到了嗎？",
-                default=False,
-            ),
-            "預算(¥)": st.column_config.NumberColumn(
-                "預算(¥)",
-                format="¥%d"
-            )
+            "已購買": st.column_config.CheckboxColumn("已購買", help="買到了嗎？", default=False),
+            "預算(¥)": st.column_config.NumberColumn("預算(¥)", format="¥%d")
         },
         use_container_width=True,
         key="editor_shopping"
     )
     
-    # 自動儲存變更
     if not edited_df.equals(st.session_state.shopping_list):
         st.session_state.shopping_list = edited_df
         st.rerun()
 
-    # 簡易統計
     if not edited_df.empty:
         total_shop_budget = edited_df["預算(¥)"].sum()
         bought_count = edited_df["已購買"].sum()
-        total_count = len(edited_df)
-        st.caption(f"購物總預算: ¥{total_shop_budget:,} ｜ 進度: {bought_count}/{total_count}")
+        st.caption(f"購物總預算: ¥{total_shop_budget:,} ｜ 進度: {bought_count}/{len(edited_df)}")
 
     st.divider()
 
-    # --- 3. 🆘 緊急求助卡 (新增功能) ---
+    # 3. SOS 求助卡
     st.subheader("🆘 緊急求助卡")
-    st.caption("遇到緊急狀況時，請向當地人出示此畫面")
-
     sos_situations = {
         "日本": {
             "迷路": ("我想去這裡，請告訴我怎麼走。", "ここに行きたいです。行き方を教えてください。"),
-            "過敏": ("我有食物過敏，不能吃海鮮/花生。", "食物アレルギーがあります。海鮮類/ピーナッツは食べられません。"),
+            "過敏": ("我有食物過敏。", "食物アレルギーがあります。"),
             "受傷": ("我受傷了，請帶我去醫院。", "怪我をしました。病院に連れて行ってください。"),
             "遺失": ("我的錢包/護照不見了。", "財布/パスポートをなくしました。"),
             "飯店": ("請帶我去這家飯店。", "このホテルまでお願いします。")
@@ -696,28 +676,23 @@ with tab5:
             "飯店": ("去這家飯店", "Bai rong ram nee")
         }
     }
-
-    target_sos = st.session_state.target_country
-    if target_sos in sos_situations:
-        sos_type = st.selectbox("緊急狀況類型", list(sos_situations[target_sos].keys()))
-        sos_text = sos_situations[target_sos][sos_type]
-        
-        # 顯示大字卡
-        st.markdown(f"""
-        <div style="background:#FF4B4B; color:white; padding:20px; border-radius:15px; text-align:center; box-shadow:0 4px 15px rgba(0,0,0,0.2);">
-            <div style="font-size:1rem; opacity:0.9; margin-bottom:10px;">{sos_text[0]}</div>
-            <div style="font-size:1.8rem; font-weight:900; line-height:1.4;">{sos_text[1]}</div>
-        </div>
-        """, unsafe_allow_html=True)
+    
+    # 確保變數名稱正確，避免 NameError
+    target_country = st.session_state.target_country
+    if target_country in sos_situations:
+        sos_type = st.selectbox("緊急狀況類型", list(sos_situations[target_country].keys()))
+        sos_text = sos_situations[target_country][sos_type]
+        st.markdown(f"""<div style="background:#FF4B4B; color:white; padding:20px; border-radius:15px; text-align:center; box-shadow:0 4px 15px rgba(0,0,0,0.2);"><div style="font-size:1rem; opacity:0.9; margin-bottom:10px;">{sos_text[0]}</div><div style="font-size:1.8rem; font-weight:900; line-height:1.4;">{sos_text[1]}</div></div>""", unsafe_allow_html=True)
     else:
         st.info("目前僅支援 日/韓/泰 求助卡。")
 
     st.divider()
     
-    # --- 4. 旅遊生存會話 (原有) ---
+    # 4. 旅遊會話
     st.subheader("🗣️ 旅遊生存會話")
-    if target in SURVIVAL_PHRASES:
-        phrases = SURVIVAL_PHRASES[target]
+    # 同樣使用正確的變數名稱 target_country
+    if target_country in SURVIVAL_PHRASES:
+        phrases = SURVIVAL_PHRASES[target_country]
         cat_select = st.selectbox("選擇情境", list(phrases.keys()))
         
         for p in phrases[cat_select]:
@@ -727,3 +702,5 @@ with tab5:
                 <div style="font-size:1.2rem; font-weight:bold; color:{current_theme['text']};">{p[1]}</div>
             </div>
             """, unsafe_allow_html=True)
+    else:
+        st.info("目前僅支援 日/韓/泰 之會話。")
