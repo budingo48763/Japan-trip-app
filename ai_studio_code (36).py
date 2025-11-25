@@ -11,7 +11,7 @@ import random
 # -------------------------------------
 st.set_page_config(page_title="2026 旅程規劃 Pro", page_icon="✈️", layout="centered", initial_sidebar_state="collapsed")
 
-# 🎨 主題配色庫 (移除深色，新增莫蘭迪色系)
+# 🎨 主題配色庫 (莫蘭迪色系)
 THEMES = {
     "⛩️ 京都緋紅 (預設)": {
         "bg": "#FDFCF5", "card": "#FFFFFF", "text": "#2B2B2B", "primary": "#8E2F2F", "secondary": "#D6A6A6", "sub": "#666666"
@@ -41,7 +41,6 @@ THEMES = {
 # -------------------------------------
 
 class WeatherService:
-    """模擬天氣服務"""
     WEATHER_ICONS = {
         "Sunny": "☀️", "Cloudy": "☁️", "Partly Cloudy": "⛅", 
         "Rainy": "🌧️", "Snowy": "❄️", "Windy": "🍃"
@@ -54,14 +53,14 @@ class WeatherService:
         month = date_obj.month
         
         base_temp = 20
-        weights = [60, 30, 10] # Sunny, Cloudy, Rainy
+        weights = [60, 30, 10]
         conditions = ["Sunny", "Cloudy", "Rainy"]
 
-        if month in [12, 1, 2]: # 冬季
+        if month in [12, 1, 2]:
             base_temp = 6
             weights = [40, 40, 10, 10]
             conditions = ["Sunny", "Cloudy", "Snowy", "Rainy"]
-        elif month in [6, 7, 8]: # 夏季
+        elif month in [6, 7, 8]:
             base_temp = 30
             weights = [50, 20, 30]
         
@@ -176,7 +175,6 @@ if "target_country" not in st.session_state: st.session_state.target_country = "
 if "selected_theme_name" not in st.session_state: st.session_state.selected_theme_name = "⛩️ 京都緋紅 (預設)"
 if "start_date" not in st.session_state: st.session_state.start_date = datetime(2026, 1, 17)
 
-# 獲取當前主題顏色
 current_theme = THEMES[st.session_state.selected_theme_name]
 
 if "trip_data" not in st.session_state:
@@ -234,7 +232,7 @@ if "checklist" not in st.session_state or not isinstance(st.session_state.checkl
 TRANSPORT_OPTIONS = ["🚆 電車", "🚌 巴士", "🚶 步行", "🚕 計程車", "🚗 自駕", "🚢 船", "✈️ 飛機"]
 
 # -------------------------------------
-# 4. CSS 樣式 (混合 Apple Style 與 原有樣式)
+# 4. CSS 樣式
 # -------------------------------------
 st.markdown(f"""
     <style>
@@ -246,12 +244,11 @@ st.markdown(f"""
         font-family: 'Inter', 'Noto Serif JP', sans-serif !important;
     }}
 
-    /* 隱藏預設 Streamlit 元素 */
     [data-testid="stSidebarCollapsedControl"], section[data-testid="stSidebar"], 
     div[data-testid="stToolbar"], div[data-testid="stDecoration"], footer {{ display: none !important; }}
     header[data-testid="stHeader"] {{ height: 0 !important; background: transparent !important; }}
 
-    /* ====== 1. Apple Style 元件 (僅用於行程頁 Tab 1) ====== */
+    /* Apple Style Cards */
     .apple-card {{
         background: rgba(255, 255, 255, 0.85);
         backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
@@ -260,307 +257,12 @@ st.markdown(f"""
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
     }}
     .apple-time {{ font-weight: 700; font-size: 1.1rem; color: {current_theme['text']}; }}
-    .apple-title {{ font-size: 1.15rem; font-weight: 600; margin-bottom: 4px; }}
-    .apple-loc {{ font-size: 0.9rem; color: {current_theme['sub']}; display:flex; align-items:center; gap:5px; }}
+    .apple-title {{ font-size: 1.1rem; font-weight: 700; margin-bottom: 2px; line-height: 1.4; }}
+    .apple-loc {{ font-size: 0.9rem; color: {current_theme['sub']}; display:flex; align-items:center; gap:5px; margin-top:5px; }}
+    
+    /* Weather Widget */
     .apple-weather-widget {{
         background: linear-gradient(135deg, {current_theme['primary']} 0%, {current_theme['text']} 150%);
         color: white; padding: 15px 20px; border-radius: 20px;
         margin-bottom: 25px; box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-        display: flex; align-items: center; justify-content: space-between;
-    }}
-    
-    /* Day 按鈕樣式 (iOS Segmented Control) */
-    div[data-testid="stRadio"] > div {{
-        background-color: {current_theme['secondary']} !important;
-        padding: 4px !important; border-radius: 12px !important;
-        gap: 0px !important; border: none !important;
-    }}
-    div[data-testid="stRadio"] label {{
-        background-color: transparent !important; border: none !important;
-        flex: 1 !important; text-align: center !important; justify-content: center !important;
-        border-radius: 9px !important; height: auto !important; min-width: 50px !important;
-    }}
-    div[data-testid="stRadio"] label[data-checked="true"] {{
-        background-color: {current_theme['card']} !important;
-        color: {current_theme['text']} !important;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important; font-weight: bold !important;
-    }}
-
-    /* ====== 2. 原始樣式 (保留給地圖、清單、資訊使用) ====== */
-    .info-card {{
-        background-color: {current_theme['card']}; border-radius: 12px; padding: 20px; margin-bottom: 15px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #F0F0F0;
-    }}
-    .info-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; color: {current_theme['sub']}; font-size: 0.85rem; font-weight: bold; }}
-    .info-time {{ font-size: 1.8rem; font-weight: 900; color: {current_theme['text']}; margin-bottom: 5px; font-family: 'Times New Roman', serif; }}
-    .info-loc {{ color: {current_theme['sub']}; font-size: 0.9rem; display: flex; align-items: center; gap: 5px; }}
-    .info-tag {{ background: {current_theme['bg']}; color: {current_theme['sub']}; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; }}
-
-    /* 地圖路線動畫 */
-    .map-tl-container {{ position: relative; max-width: 100%; margin: 20px auto; padding-left: 30px; }}
-    .map-tl-container::before {{
-        content: ''; position: absolute; top: 0; bottom: 0; left: 14px; width: 2px;
-        background-image: linear-gradient({current_theme['primary']} 40%, rgba(255,255,255,0) 0%);
-        background-position: right; background-size: 2px 12px; background-repeat: repeat-y;
-    }}
-    .map-tl-item {{ position: relative; margin-bottom: 25px; }}
-    .map-tl-icon {{
-        position: absolute; left: -31px; top: 0px; width: 32px; height: 32px;
-        background: {current_theme['card']}; border: 2px solid {current_theme['primary']}; border-radius: 50%;
-        text-align: center; line-height: 28px; font-size: 16px; z-index: 2;
-    }}
-    .map-tl-content {{
-        background: {current_theme['card']}; border: 1px solid #E0E0E0; border-left: 4px solid {current_theme['primary']};
-        padding: 12px 15px; border-radius: 4px; box-shadow: 0 3px 6px rgba(0,0,0,0.05);
-    }}
-
-    /* UI Tweaks */
-    button[data-baseweb="tab"] {{ border-radius: 20px !important; margin-right:5px !important; }}
-    div[data-baseweb="input"], div[data-baseweb="base-input"] {{ border: none !important; border-bottom: 1px solid {current_theme['secondary']} !important; background: transparent !important; }}
-    input {{ color: {current_theme['text']} !important; }}
-    </style>
-""", unsafe_allow_html=True)
-
-# -------------------------------------
-# 5. 主畫面
-# -------------------------------------
-st.markdown(f'<div style="font-size:2.2rem; font-weight:900; text-align:center; margin-bottom:5px; color:{current_theme["text"]};">{st.session_state.trip_title}</div>', unsafe_allow_html=True)
-st.markdown(f'<div style="text-align:center; color:{current_theme["sub"]}; font-size:0.9rem; margin-bottom:20px;">{st.session_state.start_date.strftime("%Y/%m/%d")} 出發</div>', unsafe_allow_html=True)
-
-with st.expander("⚙️ 設定"):
-    st.session_state.trip_title = st.text_input("標題", value=st.session_state.trip_title)
-    theme_name = st.selectbox("主題", list(THEMES.keys()), index=list(THEMES.keys()).index(st.session_state.selected_theme_name))
-    if theme_name != st.session_state.selected_theme_name:
-        st.session_state.selected_theme_name = theme_name
-        st.rerun()
-    c1, c2 = st.columns(2)
-    st.session_state.start_date = c1.date_input("日期", value=st.session_state.start_date)
-    st.session_state.trip_days_count = c2.number_input("天數", 1, 30, st.session_state.trip_days_count)
-    st.session_state.target_country = st.selectbox("地區", ["日本", "韓國", "泰國", "台灣"])
-    uf = st.file_uploader("匯入 Excel", type=["xlsx"])
-    if uf and st.button("匯入"): process_excel_upload(uf)
-
-# Init Days
-for d in range(1, st.session_state.trip_days_count + 1):
-    if d not in st.session_state.trip_data: st.session_state.trip_data[d] = []
-
-tab1, tab2, tab3, tab4 = st.tabs(["📅 行程", "🗺️ 路線", "🎒 清單", "ℹ️ 資訊"])
-
-# ==========================================
-# 1. 行程規劃 (Apple Style / iOS Design)
-# ==========================================
-with tab1:
-    # Day 選擇器 (iOS Segmented Control 風格)
-    selected_day_num = st.radio("DaySelect", list(range(1, st.session_state.trip_days_count + 1)), 
-                                index=0, horizontal=True, label_visibility="collapsed", 
-                                format_func=lambda x: f"Day {x}")
-    
-    current_date = st.session_state.start_date + timedelta(days=selected_day_num - 1)
-    current_items = st.session_state.trip_data[selected_day_num]
-    current_items.sort(key=lambda x: x['time'])
-    
-    # --- Apple Style Weather Widget ---
-    first_loc = current_items[0]['loc'] if current_items and current_items[0]['loc'] else (st.session_state.target_country if st.session_state.target_country != "日本" else "京都")
-    weather = WeatherService.get_forecast(first_loc, current_date)
-    
-    st.markdown(f"""
-    <div class="apple-weather-widget">
-        <div style="display:flex; align-items:center; gap:15px;">
-            <div style="font-size:2.5rem;">{weather['icon']}</div>
-            <div>
-                <div style="font-size:2rem; font-weight:700; line-height:1;">{weather['high']}°</div>
-                <div style="font-size:0.9rem; opacity:0.9;">L:{weather['low']}°</div>
-            </div>
-        </div>
-        <div style="text-align:right;">
-            <div style="font-weight:700;">{current_date.strftime('%m/%d %a')}</div>
-            <div style="font-size:0.9rem; opacity:0.9;">📍 {first_loc}</div>
-            <div style="font-size:0.8rem; opacity:0.8; margin-top:2px;">{weather['desc']}</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    is_edit_mode = st.toggle("編輯模式", value=False)
-    if is_edit_mode and st.button("➕ 新增行程", use_container_width=True):
-        st.session_state.trip_data[selected_day_num].append({"id": int(datetime.now().timestamp()), "time": "09:00", "title": "新行程", "loc": "", "cost": 0, "cat": "other", "note": "", "expenses": [], "trans_mode": "📍 移動", "trans_min": 30})
-        st.rerun()
-
-    # --- 行程列表 (Apple Cards) ---
-    st.markdown('<div style="margin-top:10px;">', unsafe_allow_html=True)
-    
-    if not current_items:
-        st.info("🍵 點擊「編輯模式」開始安排今日行程")
-
-    for index, item in enumerate(current_items):
-        map_link = get_single_map_link(item['loc'])
-        map_btn = f'<a href="{map_link}" target="_blank" style="text-decoration:none; margin-left:8px; font-size:0.8rem; background:#EEE; color:#333; padding:2px 8px; border-radius:10px;">🗺️</a>' if item['loc'] else ""
-        
-        cost_display = ""
-        total_exp = sum(x['price'] for x in item.get('expenses', []))
-        final_cost = total_exp if total_exp > 0 else item.get('cost', 0)
-        if final_cost > 0:
-            cost_display = f'<span style="background:{current_theme["primary"]}; color:white; padding:2px 8px; border-radius:12px; font-size:0.75rem;">¥{final_cost:,}</span>'
-
-        note_div = f'<div style="font-size:0.85rem; color:{current_theme["sub"]}; background:{current_theme["bg"]}; padding:8px; border-radius:8px; margin-top:8px;">📝 {item["note"]}</div>' if item['note'] and not is_edit_mode else ""
-        
-        # Apple Card HTML
-        st.markdown(f"""
-        <div style="display:flex; gap:15px; margin-bottom:0px;">
-            <div style="display:flex; flex-direction:column; align-items:center; width:50px;">
-                <div style="font-weight:700; color:{current_theme['text']};">{item['time']}</div>
-                <div style="flex-grow:1; width:2px; background:{current_theme['secondary']}; margin:5px 0; opacity:0.5;"></div>
-            </div>
-            <div style="flex-grow:1;">
-                <div class="apple-card">
-                    <div style="display:flex; justify-content:space-between; align-items:start;">
-                        <div class="apple-title">{item['title']}</div>
-                        {cost_display}
-                    </div>
-                    <div class="apple-loc">📍 {item['loc'] or '未設定'} {map_btn}</div>
-                    {note_div}
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if is_edit_mode:
-            with st.container(border=True):
-                c1, c2 = st.columns([2, 1])
-                item['title'] = c1.text_input("名稱", item['title'], key=f"t_{item['id']}")
-                item['time'] = c2.time_input("時間", datetime.strptime(item['time'], "%H:%M").time(), key=f"tm_{item['id']}").strftime("%H:%M")
-                item['loc'] = st.text_input("地點", item['loc'], key=f"l_{item['id']}")
-                item['note'] = st.text_area("備註", item['note'], key=f"n_{item['id']}")
-                if st.button("🗑️ 刪除", key=f"del_{item['id']}"):
-                    st.session_state.trip_data[selected_day_num].pop(index)
-                    st.rerun()
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    if current_items:
-        route_url = generate_google_map_route(current_items)
-        st.markdown(f"<div style='text-align:center; margin-top:20px;'><a href='{route_url}' target='_blank' style='background:{current_theme['primary']}; color:white; padding:12px 30px; border-radius:30px; text-decoration:none; font-weight:bold; box-shadow:0 4px 10px rgba(0,0,0,0.2);'>🚗 開啟 Google Maps 導航</a></div>", unsafe_allow_html=True)
-
-
-# ==========================================
-# 2. 路線全覽 (保持原樣)
-# ==========================================
-with tab2:
-    st.markdown(f'<div style="text-align:center; color:{current_theme["sub"]}; font-weight:bold; margin-bottom:15px;">VISUAL ROUTE MAP</div>', unsafe_allow_html=True)
-    map_day = st.selectbox("選擇天數", list(range(1, st.session_state.trip_days_count + 1)), format_func=lambda x: f"Day {x}")
-    map_items = sorted(st.session_state.trip_data[map_day], key=lambda x: x['time'])
-    
-    if map_items:
-        t_html = ['<div class="map-tl-container">']
-        for item in map_items:
-            icon = get_category_icon(item.get('cat', 'other'))
-            t_html.append(f"""
-            <div class='map-tl-item'>
-                <div class='map-tl-icon'>{icon}</div>
-                <div class='map-tl-content'>
-                    <div style='color:{current_theme['primary']}; font-weight:bold;'>{item['time']}</div>
-                    <div style='font-weight:900; font-size:1.1rem; color:{current_theme['text']};'>{item['title']}</div>
-                    <div style='font-size:0.85rem; color:{current_theme['sub']};'>📍 {item['loc']}</div>
-                </div>
-            </div>""")
-        t_html.append('</div>')
-        st.markdown("".join(t_html), unsafe_allow_html=True)
-    else:
-        st.info("🌸 本日尚無行程")
-
-# ==========================================
-# 3. 準備清單 (新增智能推薦，恢復旅遊資訊)
-# ==========================================
-with tab3:
-    # --- 新增：智能天氣推薦 ---
-    recs, weather_summary = get_packing_recommendations(st.session_state.trip_data, st.session_state.start_date)
-    st.info(f"**🌤️ 智能穿搭推薦**\n\n預測氣溫：{weather_summary['min']}°C ~ {weather_summary['max']}°C\n\n建議攜帶：" + "、".join(recs))
-
-    # --- 原有清單 ---
-    c_list_head, c_list_edit = st.columns([3, 1])
-    c_list_head.subheader("🎒 準備清單")
-    edit_list_mode = c_list_edit.toggle("編輯")
-
-    for category, items in st.session_state.checklist.items():
-        st.markdown(f"**{category}**")
-        cols = st.columns(2)
-        keys_del = []
-        for i, (item, checked) in enumerate(items.items()):
-            col = cols[i % 2]
-            if edit_list_mode:
-                c1, c2 = col.columns([4,1])
-                c1.text(item)
-                if c2.button("x", key=f"d_{category}_{item}"): keys_del.append(item)
-            else:
-                st.session_state.checklist[category][item] = col.checkbox(item, value=checked, key=f"c_{category}_{item}")
-        if keys_del:
-            for k in keys_del: del st.session_state.checklist[category][k]
-            st.rerun()
-        if edit_list_mode:
-            new_i = st.text_input(f"加到 {category}", key=f"n_{category}")
-            if new_i and st.button("➕", key=f"btn_{category}"):
-                st.session_state.checklist[category][new_i] = False
-                st.rerun()
-
-    st.markdown("---")
-    
-    # --- 恢復：旅遊資訊 (Logic Restored) ---
-    country = st.session_state.target_country
-    st.markdown(f"### 🌍 當地旅遊資訊 ({country})")
-    
-    trip_month = st.session_state.start_date.month
-    season_info = ""
-    weather_icon = "🌤️"
-    
-    if 3 <= trip_month <= 5:
-        season_info = "春季：氣候宜人但早晚偏涼，適合洋蔥式穿搭。"
-        weather_icon = "🌸"
-    elif 6 <= trip_month <= 8:
-        season_info = "夏季：炎熱潮濕，注意防曬與補充水分。"
-        weather_icon = "☀️"
-    elif 9 <= trip_month <= 11:
-        season_info = "秋季：涼爽舒適，是旅遊的最佳季節。"
-        weather_icon = "🍁"
-    else:
-        season_info = "冬季：寒冷乾燥，需準備保暖大衣。"
-        weather_icon = "❄️"
-    
-    voltage_info = "100V (雙平腳)"
-    sos_info = "警察 110 / 救護 119"
-    tip_info = "無小費文化，餐廳含稅。"
-    
-    if country == "韓國":
-        voltage_info = "220V (兩孔圓形)"
-        sos_info = "警察 112 / 救護 119"
-    elif country == "泰國":
-        voltage_info = "220V (雙平腳/兩孔圓)"
-        sos_info = "觀光警察 1155"
-        tip_info = "有小費習慣，按摩約 50-100 泰銖。"
-    elif country == "台灣":
-        voltage_info = "110V (雙平腳)"
-    
-    # 使用 st.info/success/warning/error 恢復原版型
-    c_info1, c_info2 = st.columns(2)
-    with c_info1:
-        st.info(f"**{weather_icon} {trip_month}月氣候建議**\n\n{season_info}")
-        st.success(f"**🔌 電壓**\n\n{voltage_info}")
-    with c_info2:
-        st.warning(f"**🚑 緊急電話**\n\n{sos_info}")
-        st.error(f"**💴 小費與消費**\n\n{tip_info}")
-
-# ==========================================
-# 4. 重要資訊 (恢復原始版型)
-# ==========================================
-with tab4:
-    st.subheader("✈️ 航班")
-    flights = st.session_state.flight_info
-    out_f, in_f = flights["outbound"], flights["inbound"]
-    
-    # 使用原始 HTML 結構 (.info-card)
-    st.markdown(f"""<div class="info-card"><div class="info-header"><span>📅 {out_f['date']}</span> <span>✈️ {out_f['code']}</span></div><div class="info-time">{out_f['dep']} -> {out_f['arr']}</div><div class="info-loc"><span>📍 {out_f['dep_loc']}</span> <span style="margin:0 5px;">✈</span> <span>{out_f['arr_loc']}</span></div><div style="text-align:right; margin-top:5px;"><span class="info-tag">去程</span></div></div>""", unsafe_allow_html=True)
-    st.markdown(f"""<div class="info-card"><div class="info-header"><span>📅 {in_f['date']}</span> <span>✈️ {in_f['code']}</span></div><div class="info-time">{in_f['dep']} -> {in_f['arr']}</div><div class="info-loc"><span>📍 {in_f['dep_loc']}</span> <span style="margin:0 5px;">✈</span> <span>{in_f['arr_loc']}</span></div><div style="text-align:right; margin-top:5px;"><span class="info-tag">回程</span></div></div>""", unsafe_allow_html=True)
-
-    st.divider()
-    st.subheader("🏨 住宿")
-    for hotel in st.session_state.hotel_info:
-        hotel_html = f"""<div class="info-card" style="border-left: 5px solid {current_theme['primary']};"><div class="info-header"><span class="info-tag" style="background:{current_theme['primary']}; color:white;">{hotel['range']}</span><span>{hotel['date']}</span></div><div style="font-size:1.3rem; font-weight:900; color:{current_theme['text']}; margin: 10px 0;">{hotel['name']}</div><div class="info-loc" style="margin-bottom:10px;">📍 {hotel['addr']}</div><a href="{hotel['link']}" target="_blank" style="text-decoration:none; color:{current_theme['primary']}; font-size:0.9rem; font-weight:bold; border:1px solid {current_theme['primary']}; padding:4px 12px; border-radius:20px;">🗺️ 地圖</a></div>"""
-        st.markdown(hotel_html, unsafe_allow_html=True)
+        display: flex; align-items: center; justify-cont
