@@ -5,6 +5,7 @@ import time
 import math
 import pandas as pd
 import random
+import json
 
 # -------------------------------------
 # 1. 系統設定 & 主題定義
@@ -175,6 +176,13 @@ if "trip_days_count" not in st.session_state: st.session_state.trip_days_count =
 if "target_country" not in st.session_state: st.session_state.target_country = "日本"
 if "selected_theme_name" not in st.session_state: st.session_state.selected_theme_name = "⛩️ 京都緋紅 (預設)"
 if "start_date" not in st.session_state: st.session_state.start_date = datetime(2026, 1, 17)
+
+# --- 願望清單初始化 ---
+if "wishlist" not in st.session_state:
+    st.session_state.wishlist = [
+        {"id": 901, "title": "HARBS 千層蛋糕", "loc": "大丸京都店", "note": "必吃水果千層"},
+        {"id": 902, "title": " % Arabica 咖啡", "loc": "嵐山", "note": "網美打卡點"}
+    ]
 
 current_theme = THEMES[st.session_state.selected_theme_name]
 
@@ -376,7 +384,8 @@ with st.expander("⚙️ 設定"):
 for d in range(1, st.session_state.trip_days_count + 1):
     if d not in st.session_state.trip_data: st.session_state.trip_data[d] = []
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 行程", "🗺️ 路線", "🎒 清單", "ℹ️ 資訊", "🧰 工具"])
+# 定義 Tabs，新增「✨ 願望」
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📅 行程", "✨ 願望", "🗺️ 路線", "🎒 清單", "ℹ️ 資訊", "🧰 工具"])
 
 # ==========================================
 # 1. 行程規劃
@@ -432,7 +441,7 @@ with tab1:
         clean_note = item["note"].replace('\n', '<br>')
         note_div = f'<div style="font-size:0.85rem; color:{current_theme["sub"]}; background:{current_theme["bg"]}; padding:8px; border-radius:8px; margin-top:8px; line-height:1.4;">📝 {clean_note}</div>' if item['note'] and not is_edit_mode else ""
         
-        # --- 記帳項目顯示 (修復) ---
+        # --- 記帳項目顯示 ---
         expense_details_html = ""
         if item.get('expenses'):
             rows = ""
@@ -486,11 +495,66 @@ with tab1:
                  trans_html = f"""<div style="display:flex; gap:15px;"><div style="display:flex; flex-direction:column; align-items:center; width:50px;"><div style="flex-grow:1; width:2px; border-left:2px dashed {current_theme['secondary']}; margin:0; opacity:0.6;"></div></div><div style="flex-grow:1; padding:10px 0;"><span class="trans-badge">{t_mode} 約 {t_min} 分</span></div></div>"""
                  st.markdown(trans_html, unsafe_allow_html=True)
 
-
 # ==========================================
-# 2. 路線全覽
+# 2. 願望清單 (新增功能)
 # ==========================================
 with tab2:
+    st.markdown(f'<div style="text-align:center; color:{current_theme["sub"]}; font-weight:bold; margin-bottom:15px;">MY WISHLIST</div>', unsafe_allow_html=True)
+    
+    # 新增願望
+    with st.expander("➕ 新增願望景點", expanded=False):
+        w_title = st.text_input("景點名稱", placeholder="例如: 晴空塔")
+        w_loc = st.text_input("地點/區域", placeholder="例如: 淺草")
+        w_note = st.text_input("備註", placeholder="想去吃...")
+        if st.button("加入清單") and w_title:
+            st.session_state.wishlist.append({
+                "id": int(time.time()), "title": w_title, "loc": w_loc, "note": w_note
+            })
+            st.rerun()
+
+    if not st.session_state.wishlist:
+        st.info("清單是空的，快去尋找想去的景點吧！")
+
+    # 顯示願望列表
+    for i, wish in enumerate(st.session_state.wishlist):
+        with st.container():
+            st.markdown(f"""
+            <div class="apple-card" style="padding:15px; margin-bottom:10px; border-left:4px solid {current_theme['primary']};">
+                <div style="font-weight:bold; font-size:1.1rem;">{wish['title']}</div>
+                <div style="font-size:0.9rem; color:{current_theme['sub']};">📍 {wish['loc']}｜📝 {wish['note']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # 排程操作
+            c1, c2, c3 = st.columns([2, 1, 1])
+            target_day = c1.selectbox("排入哪天?", list(range(1, st.session_state.trip_days_count + 1)), key=f"wd_{wish['id']}")
+            
+            if c2.button("排程", key=f"wm_{wish['id']}"):
+                # 移動到行程
+                new_item = {
+                    "id": int(time.time()), 
+                    "time": "09:00", 
+                    "title": wish['title'], 
+                    "loc": wish['loc'], 
+                    "cost": 0, "cat": "spot", 
+                    "note": wish['note'], 
+                    "expenses": [], 
+                    "trans_mode": "📍 移動", "trans_min": 30
+                }
+                st.session_state.trip_data[target_day].append(new_item)
+                st.session_state.wishlist.pop(i)
+                st.toast(f"已將 {wish['title']} 排入 Day {target_day}！")
+                time.sleep(1)
+                st.rerun()
+            
+            if c3.button("刪除", key=f"wdl_{wish['id']}"):
+                st.session_state.wishlist.pop(i)
+                st.rerun()
+
+# ==========================================
+# 3. 路線全覽
+# ==========================================
+with tab3:
     st.markdown(f'<div style="text-align:center; color:{current_theme["sub"]}; font-weight:bold; margin-bottom:15px;">VISUAL ROUTE MAP</div>', unsafe_allow_html=True)
     map_day = st.selectbox("選擇天數", list(range(1, st.session_state.trip_days_count + 1)), format_func=lambda x: f"Day {x}")
     map_items = sorted(st.session_state.trip_data[map_day], key=lambda x: x['time'])
@@ -510,9 +574,9 @@ with tab2:
         st.info("🌸 本日尚無行程")
 
 # ==========================================
-# 3. 準備清單
+# 4. 準備清單
 # ==========================================
-with tab3:
+with tab4:
     recs, weather_summary = get_packing_recommendations(st.session_state.trip_data, st.session_state.start_date)
     st.info(f"**🌤️ 智能穿搭推薦**\n\n預測氣溫：{weather_summary['min']}°C ~ {weather_summary['max']}°C\n\n建議攜帶：" + "、".join(recs))
 
@@ -553,9 +617,9 @@ with tab3:
         st.error(f"**💴 小費**\n\n日本無小費文化。")
 
 # ==========================================
-# 4. 重要資訊
+# 5. 重要資訊
 # ==========================================
-with tab4:
+with tab5:
     col_info_1, col_info_2 = st.columns([3, 1])
     col_info_1.subheader("✈️ 航班")
     edit_info_mode = col_info_2.toggle("✏️ 編輯資訊")
@@ -605,12 +669,54 @@ with tab4:
         st.markdown(hotel_html, unsafe_allow_html=True)
 
 # ==========================================
-# 5. 實用工具
+# 6. 實用工具
 # ==========================================
-with tab5:
+with tab6:
     st.header("🧰 實用工具")
     
-    # 1. 匯率計算機
+    # 1. 資料備份與分享 (共同編輯解決方案)
+    with st.expander("📤 匯出/匯入 行程資料 (共同編輯用)", expanded=True):
+        st.caption("將目前的行程下載成檔案，傳給朋友匯入，即可接續編輯！")
+        
+        # 準備資料
+        export_data = {
+            "trip_data": st.session_state.trip_data,
+            "checklist": st.session_state.checklist,
+            "wishlist": st.session_state.wishlist,
+            "hotel_info": st.session_state.hotel_info,
+            "flight_info": st.session_state.flight_info
+        }
+        json_str = json.dumps(export_data, default=str, indent=4)
+        
+        c_ex1, c_ex2 = st.columns(2)
+        c_ex1.download_button(
+            label="⬇️ 下載行程檔 (.json)",
+            data=json_str,
+            file_name="my_trip_plan.json",
+            mime="application/json"
+        )
+        
+        uploaded_json = c_ex2.file_uploader("⬆️ 匯入行程檔", type=["json"], label_visibility="collapsed")
+        if uploaded_json:
+            try:
+                data = json.load(uploaded_json)
+                # 簡單的資料恢復邏輯，實際應用可能需要更嚴謹的檢查
+                # 這裡需要將 key 從字串轉回整數 (因為 JSON key 都是字串)
+                if "trip_data" in data:
+                    st.session_state.trip_data = {int(k): v for k, v in data["trip_data"].items()}
+                if "checklist" in data: st.session_state.checklist = data["checklist"]
+                if "wishlist" in data: st.session_state.wishlist = data["wishlist"]
+                if "hotel_info" in data: st.session_state.hotel_info = data["hotel_info"]
+                if "flight_info" in data: st.session_state.flight_info = data["flight_info"]
+                st.toast("✅ 行程匯入成功！")
+                time.sleep(1)
+                st.rerun()
+            except Exception as e:
+                st.error(f"匯入失敗: {e}")
+
+    st.divider()
+
+    # 2. 匯率計算機
     st.subheader("💴 匯率與退稅計算")
     col_calc1, col_calc2 = st.columns(2)
     amount = col_calc1.number_input("輸入外幣金額", min_value=0, step=100)
@@ -624,7 +730,7 @@ with tab5:
 
     st.divider()
 
-    # 2. 購物清單
+    # 3. 購物清單
     st.subheader("🛍️ 伴手禮與代購清單")
     if "shopping_list" not in st.session_state:
         st.session_state.shopping_list = pd.DataFrame(columns=["對象", "商品名稱", "預算(¥)", "已購買"])
@@ -651,7 +757,7 @@ with tab5:
 
     st.divider()
 
-    # 3. SOS 求助卡
+    # 4. SOS 求助卡
     st.subheader("🆘 緊急求助卡")
     sos_situations = {
         "日本": {
@@ -688,7 +794,7 @@ with tab5:
 
     st.divider()
     
-    # 4. 旅遊會話
+    # 5. 旅遊會話
     st.subheader("🗣️ 旅遊生存會話")
     # 同樣使用正確的變數名稱 target_country
     if target_country in SURVIVAL_PHRASES:
