@@ -669,53 +669,111 @@ with tab5:
         st.markdown(hotel_html, unsafe_allow_html=True)
 
 # ==========================================
-# 6. 實用工具
+# 新增：雲端同步功能 (Google Sheets)
+# ==========================================
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
+# 設定 Google Sheets 連線函數
+def get_cloud_connection():
+    # 定義範圍
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    
+    try:
+        # 讀取憑證 (請確保 secrets.json 在同目錄下，或設定 Streamlit Secrets)
+        # 如果是在 Streamlit Cloud 部署，建議使用 st.secrets
+        creds = ServiceAccountCredentials.from_json_keyfile_name('secrets.json', scope)
+        client = gspread.authorize(creds)
+        return client
+    except Exception as e:
+        return None
+
+def save_to_cloud(json_str):
+    client = get_cloud_connection()
+    if client:
+        try:
+            # 打開試算表 (請確保名稱正確且已共用給服務帳戶)
+            sheet = client.open("TripPlanDB").sheet1 
+            # 將資料寫入 A1 儲存格 (為了簡便，直接存整串 JSON)
+            sheet.update_cell(1, 1, json_str)
+            return True, "儲存成功！"
+        except Exception as e:
+            return False, f"寫入失敗: {e}"
+    else:
+        return False, "找不到 secrets.json 或連線失敗"
+
+def load_from_cloud():
+    client = get_cloud_connection()
+    if client:
+        try:
+            sheet = client.open("TripPlanDB").sheet1
+            # 從 A1 讀取
+            data_str = sheet.cell(1, 1).value
+            return data_str
+        except Exception as e:
+            return None
+    return None
+
+# ... (中間原本的程式碼保持不變) ...
+
+# ==========================================
+# 6. 實用工具 (修改版：加入雲端同步)
 # ==========================================
 with tab6:
     st.header("🧰 實用工具")
     
-    # 1. 資料備份與分享 (共同編輯解決方案)
-    with st.expander("📤 匯出/匯入 行程資料 (共同編輯用)", expanded=True):
-        st.caption("將目前的行程下載成檔案，傳給朋友匯入，即可接續編輯！")
-        
-        # 準備資料
-        export_data = {
-            "trip_data": st.session_state.trip_data,
-            "checklist": st.session_state.checklist,
-            "wishlist": st.session_state.wishlist,
-            "hotel_info": st.session_state.hotel_info,
-            "flight_info": st.session_state.flight_info
-        }
-        json_str = json.dumps(export_data, default=str, indent=4)
-        
-        c_ex1, c_ex2 = st.columns(2)
-        c_ex1.download_button(
-            label="⬇️ 下載行程檔 (.json)",
-            data=json_str,
-            file_name="my_trip_plan.json",
-            mime="application/json"
-        )
-        
-        uploaded_json = c_ex2.file_uploader("⬆️ 匯入行程檔", type=["json"], label_visibility="collapsed")
-        if uploaded_json:
-            try:
-                data = json.load(uploaded_json)
-                # 簡單的資料恢復邏輯，實際應用可能需要更嚴謹的檢查
-                # 這裡需要將 key 從字串轉回整數 (因為 JSON key 都是字串)
-                if "trip_data" in data:
-                    st.session_state.trip_data = {int(k): v for k, v in data["trip_data"].items()}
-                if "checklist" in data: st.session_state.checklist = data["checklist"]
-                if "wishlist" in data: st.session_state.wishlist = data["wishlist"]
-                if "hotel_info" in data: st.session_state.hotel_info = data["hotel_info"]
-                if "flight_info" in data: st.session_state.flight_info = data["flight_info"]
-                st.toast("✅ 行程匯入成功！")
-                time.sleep(1)
-                st.rerun()
-            except Exception as e:
-                st.error(f"匯入失敗: {e}")
+    # --- 新增：☁️ 雲端同步區塊 ---
+    st.subheader("☁️ 雲端共同編輯 (Google Sheets)")
+    st.caption("需先設定 Google API 才能使用。這能讓多人讀取同一份進度。")
+    
+    col_cloud1, col_cloud2 = st.columns(2)
+    
+    # 上傳至雲端
+    if col_cloud1.button("☁️ 上傳目前進度至雲端", use_container_width=True):
+        with st.spinner("正在連線至 Google Sheets..."):
+            # 準備資料
+            export_data = {
+                "trip_data": st.session_state.trip_data,
+                "checklist": st.session_state.checklist,
+                "wishlist": st.session_state.wishlist,
+                "hotel_info": st.session_state.hotel_info,
+                "flight_info": st.session_state.flight_info
+            }
+            json_str = json.dumps(export_data, default=str)
+            success, msg = save_to_cloud(json_str)
+            if success:
+                st.toast(f"✅ {msg}")
+            else:
+                st.error(msg)
+
+    # 從雲端下載
+    if col_cloud2.button("📥 從雲端下載最新進度", use_container_width=True):
+        with st.spinner("正在讀取雲端資料..."):
+            cloud_data_str = load_from_cloud()
+            if cloud_data_str:
+                try:
+                    data = json.loads(cloud_data_str)
+                    # 恢復資料邏輯 (與匯入 JSON 相同)
+                    if "trip_data" in data:
+                        st.session_state.trip_data = {int(k): v for k, v in data["trip_data"].items()}
+                    if "checklist" in data: st.session_state.checklist = data["checklist"]
+                    if "wishlist" in data: st.session_state.wishlist = data["wishlist"]
+                    if "hotel_info" in data: st.session_state.hotel_info = data["hotel_info"]
+                    if "flight_info" in data: st.session_state.flight_info = data["flight_info"]
+                    st.toast("✅ 同步成功！已載入最新行程")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"資料解析失敗: {e}")
+            else:
+                st.error("無法讀取雲端資料，請檢查連線或檔案權限。")
 
     st.divider()
 
+    # ... (下方保留原本的 JSON 檔案匯出匯入、匯率計算、購物清單等功能) ...
+    # 1. 檔案備份 (JSON)
+    with st.expander("📂 本機檔案備份 (無須網路)", expanded=False):
+        # ... (原本的 JSON 下載/上傳代碼) ...
     # 2. 匯率計算機
     st.subheader("💴 匯率與退稅計算")
     col_calc1, col_calc2 = st.columns(2)
