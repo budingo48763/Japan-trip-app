@@ -674,18 +674,32 @@ with tab5:
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# 設定 Google Sheets 連線函數
+# 原本的寫法 (只適用於本機，有檔案時)
+# creds = ServiceAccountCredentials.from_json_keyfile_name('secrets.json', scope)
+
+# === 請改成以下的新寫法 (同時支援本機與雲端) ===
 def get_cloud_connection():
-    # 定義範圍
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     
     try:
-        # 讀取憑證 (請確保 secrets.json 在同目錄下，或設定 Streamlit Secrets)
-        # 如果是在 Streamlit Cloud 部署，建議使用 st.secrets
-        creds = ServiceAccountCredentials.from_json_keyfile_name('secrets.json', scope)
+        # 優先嘗試從 Streamlit Secrets 讀取 (雲端環境)
+        if "gcp_service_account" in st.secrets:
+            # 如果您在 secrets 裡是用 info = """...""" 的 JSON 字串寫法：
+            # import json
+            # key_dict = json.loads(st.secrets["gcp_service_account"]["info"])
+            
+            # 如果您在 secrets 裡是直接貼上 TOML 格式 (type = "...", project_id = "...")：
+            key_dict = st.secrets["gcp_service_account"]
+            
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
+        else:
+            # 如果找不到 secrets，嘗試讀取本機檔案 (本機開發用)
+            creds = ServiceAccountCredentials.from_json_keyfile_name('secrets.json', scope)
+            
         client = gspread.authorize(creds)
         return client
     except Exception as e:
+        st.error(f"連線失敗: {e}")
         return None
 
 def save_to_cloud(json_str):
