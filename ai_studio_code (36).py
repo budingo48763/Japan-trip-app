@@ -718,7 +718,7 @@ with tab5:
     st.subheader("🗣️ 旅遊生存會話")
     if target in SURVIVAL_PHRASES:
         phrases = SURVIVAL_PHRASES[target]
-        cat_select = st.selectbox("選擇會話情境", list(phrases.keys()))
+        cat_select = st.selectbox("選擇會話情境", list(phrases.keys))
         
         for p in phrases[cat_select]:
             st.markdown(f"""
