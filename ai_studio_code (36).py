@@ -7,6 +7,14 @@ import pandas as pd
 import random
 import json
 
+# --- 嘗試匯入雲端套件 (若無安裝則略過，避免報錯) ---
+try:
+    import gspread
+    from oauth2client.service_account import ServiceAccountCredentials
+    CLOUD_AVAILABLE = True
+except ImportError:
+    CLOUD_AVAILABLE = False
+
 # -------------------------------------
 # 1. 系統設定 & 主題定義
 # -------------------------------------
@@ -40,6 +48,44 @@ THEMES = {
 # -------------------------------------
 # 2. 核心功能函數 & 模擬天氣服務
 # -------------------------------------
+
+# --- 雲端連線函數 ---
+def get_cloud_connection():
+    if not CLOUD_AVAILABLE: return None
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    try:
+        # 優先嘗試從 Streamlit Secrets 讀取
+        if "gcp_service_account" in st.secrets:
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
+        else:
+            # 本機測試用
+            creds = ServiceAccountCredentials.from_json_keyfile_name('secrets.json', scope)
+        
+        client = gspread.authorize(creds)
+        return client
+    except Exception:
+        return None
+
+def save_to_cloud(json_str):
+    client = get_cloud_connection()
+    if client:
+        try:
+            sheet = client.open("TripPlanDB").sheet1 
+            sheet.update_cell(1, 1, json_str)
+            return True, "儲存成功！"
+        except Exception as e:
+            return False, f"寫入失敗: {e}"
+    return False, "連線失敗 (請檢查 Secrets 設定)"
+
+def load_from_cloud():
+    client = get_cloud_connection()
+    if client:
+        try:
+            sheet = client.open("TripPlanDB").sheet1
+            return sheet.cell(1, 1).value
+        except Exception:
+            return None
+    return None
 
 class WeatherService:
     WEATHER_ICONS = {
@@ -177,12 +223,16 @@ if "target_country" not in st.session_state: st.session_state.target_country = "
 if "selected_theme_name" not in st.session_state: st.session_state.selected_theme_name = "⛩️ 京都緋紅 (預設)"
 if "start_date" not in st.session_state: st.session_state.start_date = datetime(2026, 1, 17)
 
-# --- 願望清單初始化 ---
+# 願望清單
 if "wishlist" not in st.session_state:
     st.session_state.wishlist = [
         {"id": 901, "title": "HARBS 千層蛋糕", "loc": "大丸京都店", "note": "必吃水果千層"},
         {"id": 902, "title": " % Arabica 咖啡", "loc": "嵐山", "note": "網美打卡點"}
     ]
+
+# 購物清單
+if "shopping_list" not in st.session_state:
+    st.session_state.shopping_list = pd.DataFrame(columns=["對象", "商品名稱", "預算(¥)", "已購買"])
 
 current_theme = THEMES[st.session_state.selected_theme_name]
 
@@ -384,7 +434,7 @@ with st.expander("⚙️ 設定"):
 for d in range(1, st.session_state.trip_days_count + 1):
     if d not in st.session_state.trip_data: st.session_state.trip_data[d] = []
 
-# 定義 Tabs，新增「✨ 願望」
+# 定義 Tabs
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📅 行程", "✨ 願望", "🗺️ 路線", "🎒 清單", "ℹ️ 資訊", "🧰 工具"])
 
 # ==========================================
@@ -417,6 +467,7 @@ with tab1:
     first_loc = current_items[0]['loc'] if current_items and current_items[0]['loc'] else (st.session_state.target_country if st.session_state.target_country != "日本" else "京都")
     weather = WeatherService.get_forecast(first_loc, current_date)
     
+    # 壓縮 HTML 避免縮排問題
     weather_html = f"""<div class="apple-weather-widget"><div style="display:flex; align-items:center; gap:15px;"><div style="font-size:2.5rem;">{weather['icon']}</div><div><div style="font-size:2rem; font-weight:700; line-height:1;">{weather['high']}°</div><div style="font-size:0.9rem; opacity:0.9;">L:{weather['low']}°</div></div></div><div style="text-align:right;"><div style="font-weight:700;">{current_date.strftime('%m/%d %a')}</div><div style="font-size:0.9rem; opacity:0.9;">📍 {first_loc}</div><div style="font-size:0.8rem; opacity:0.8; margin-top:2px;">{weather['desc']}</div></div></div>"""
     st.markdown(weather_html, unsafe_allow_html=True)
 
@@ -441,7 +492,7 @@ with tab1:
         clean_note = item["note"].replace('\n', '<br>')
         note_div = f'<div style="font-size:0.85rem; color:{current_theme["sub"]}; background:{current_theme["bg"]}; padding:8px; border-radius:8px; margin-top:8px; line-height:1.4;">📝 {clean_note}</div>' if item['note'] and not is_edit_mode else ""
         
-        # --- 記帳項目顯示 ---
+        # 記帳細項顯示
         expense_details_html = ""
         if item.get('expenses'):
             rows = ""
@@ -449,7 +500,7 @@ with tab1:
                  rows += f"<div style='display:flex; justify-content:space-between; font-size:0.8rem; color:#888; margin-top:2px;'><span>{exp['name']}</span><span>¥{exp['price']:,}</span></div>"
             expense_details_html = f"<div style='margin-top:8px; padding-top:5px; border-top:1px dashed {current_theme['secondary']}; opacity:0.8;'>{rows}</div>"
 
-        # 卡片 HTML
+        # 卡片 HTML (壓縮單行)
         card_content = f"""<div style="display:flex; gap:15px; margin-bottom:0px;"><div style="display:flex; flex-direction:column; align-items:center; width:50px;"><div style="font-weight:700; color:{current_theme['text']}; font-size:1.1rem;">{item['time']}</div><div style="flex-grow:1; width:2px; background:{current_theme['secondary']}; margin:5px 0; opacity:0.3; border-radius:2px;"></div></div><div style="flex-grow:1;"><div class="apple-card" style="margin-bottom:0px;"><div style="display:flex; justify-content:space-between; align-items:flex-start;"><div class="apple-title" style="margin-top:0;">{item['title']}</div>{cost_display}</div><div class="apple-loc">📍 {item['loc'] or '未設定'} {map_btn}</div>{note_div}{expense_details_html}</div></div></div>"""
         st.markdown(card_content, unsafe_allow_html=True)
 
@@ -462,13 +513,11 @@ with tab1:
                 item['cost'] = st.number_input("預算 (¥)", value=item['cost'], step=100, key=f"c_{item['id']}")
                 item['note'] = st.text_area("備註", item['note'], key=f"n_{item['id']}")
                 
-                # 簡單記帳
                 cx1, cx2, cx3 = st.columns([2, 1, 1])
                 cx1.text_input("支出項目", key=f"new_exp_n_{item['id']}", placeholder="項目", label_visibility="collapsed")
                 cx2.number_input("金額", min_value=0, key=f"new_exp_p_{item['id']}", label_visibility="collapsed")
                 cx3.button("➕", key=f"add_{item['id']}", on_click=add_expense_callback, args=(item['id'], selected_day_num))
                 
-                # 移除記帳項目
                 if item.get('expenses'):
                     with st.expander("管理細項"):
                          for i_ex, ex in enumerate(item['expenses']):
@@ -482,7 +531,7 @@ with tab1:
                     st.session_state.trip_data[selected_day_num].pop(index)
                     st.rerun()
         
-        # --- 交通資訊 ---
+        # 交通資訊
         if index < len(current_items) - 1:
             t_mode = item.get('trans_mode', '📍 移動')
             t_min = item.get('trans_min', 30)
@@ -496,12 +545,11 @@ with tab1:
                  st.markdown(trans_html, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 願望清單 (新增功能)
+# 2. 願望清單
 # ==========================================
 with tab2:
     st.markdown(f'<div style="text-align:center; color:{current_theme["sub"]}; font-weight:bold; margin-bottom:15px;">MY WISHLIST</div>', unsafe_allow_html=True)
     
-    # 新增願望
     with st.expander("➕ 新增願望景點", expanded=False):
         w_title = st.text_input("景點名稱", placeholder="例如: 晴空塔")
         w_loc = st.text_input("地點/區域", placeholder="例如: 淺草")
@@ -515,22 +563,14 @@ with tab2:
     if not st.session_state.wishlist:
         st.info("清單是空的，快去尋找想去的景點吧！")
 
-    # 顯示願望列表
     for i, wish in enumerate(st.session_state.wishlist):
         with st.container():
-            st.markdown(f"""
-            <div class="apple-card" style="padding:15px; margin-bottom:10px; border-left:4px solid {current_theme['primary']};">
-                <div style="font-weight:bold; font-size:1.1rem;">{wish['title']}</div>
-                <div style="font-size:0.9rem; color:{current_theme['sub']};">📍 {wish['loc']}｜📝 {wish['note']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"""<div class="apple-card" style="padding:15px; margin-bottom:10px; border-left:4px solid {current_theme['primary']};"><div style="font-weight:bold; font-size:1.1rem;">{wish['title']}</div><div style="font-size:0.9rem; color:{current_theme['sub']};">📍 {wish['loc']}｜📝 {wish['note']}</div></div>""", unsafe_allow_html=True)
             
-            # 排程操作
             c1, c2, c3 = st.columns([2, 1, 1])
             target_day = c1.selectbox("排入哪天?", list(range(1, st.session_state.trip_days_count + 1)), key=f"wd_{wish['id']}")
             
             if c2.button("排程", key=f"wm_{wish['id']}"):
-                # 移動到行程
                 new_item = {
                     "id": int(time.time()), 
                     "time": "09:00", 
@@ -556,11 +596,11 @@ with tab2:
 # ==========================================
 with tab3:
     st.markdown(f'<div style="text-align:center; color:{current_theme["sub"]}; font-weight:bold; margin-bottom:15px;">VISUAL ROUTE MAP</div>', unsafe_allow_html=True)
-    map_day = st.selectbox("選擇天數", list(range(1, st.session_state.trip_days_count + 1)), format_func=lambda x: f"Day {x}")
+    map_day = st.selectbox("選擇天數", list(range(1, st.session_state.trip_days_count + 1)), format_func=lambda x: f"Day {x}", key="map_day_select")
     map_items = sorted(st.session_state.trip_data[map_day], key=lambda x: x['time'])
     
     if map_items:
-        # --- Google Maps 導航按鈕 ---
+        # Google Maps 按鈕 (Moved)
         route_url = generate_google_map_route(map_items)
         st.markdown(f"<div style='text-align:center; margin-bottom:20px;'><a href='{route_url}' target='_blank' style='background:{current_theme['primary']}; color:white; padding:12px 30px; border-radius:30px; text-decoration:none; font-weight:bold; box-shadow:0 4px 10px rgba(0,0,0,0.2);'>🚗 開啟 Google Maps 導航</a></div>", unsafe_allow_html=True)
 
@@ -626,7 +666,6 @@ with tab5:
 
     flights = st.session_state.flight_info
     
-    # 航班顯示
     for f_key, f_label in [("outbound", "去程"), ("inbound", "回程")]:
         f_data = flights[f_key]
         if edit_info_mode:
@@ -640,7 +679,6 @@ with tab5:
                 f_data["dep_loc"] = c1.text_input("起飛地", f_data["dep_loc"], key=f"fl1_{f_key}")
                 f_data["arr_loc"] = c2.text_input("抵達地", f_data["arr_loc"], key=f"fl2_{f_key}")
         
-        # 航班 HTML
         st.markdown(f"""<div class="info-card"><div class="info-header"><span>📅 {f_data['date']}</span> <span>✈️ {f_data['code']}</span></div><div class="info-time">{f_data['dep']} -> {f_data['arr']}</div><div class="info-loc"><span>📍 {f_data['dep_loc']}</span> <span style="margin:0 5px;">✈</span> <span>{f_data['arr_loc']}</span></div><div style="text-align:right; margin-top:5px;"><span class="info-tag">{f_label}</span></div></div>""", unsafe_allow_html=True)
 
     st.divider()
@@ -669,216 +707,155 @@ with tab5:
         st.markdown(hotel_html, unsafe_allow_html=True)
 
 # ==========================================
-# 新增：雲端同步功能 (Google Sheets)
-# ==========================================
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-
-# 原本的寫法 (只適用於本機，有檔案時)
-# creds = ServiceAccountCredentials.from_json_keyfile_name('secrets.json', scope)
-
-# === 請改成以下的新寫法 (同時支援本機與雲端) ===
-def get_cloud_connection():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    
-    try:
-        # 優先嘗試從 Streamlit Secrets 讀取 (雲端環境)
-        if "gcp_service_account" in st.secrets:
-            # 如果您在 secrets 裡是用 info = """...""" 的 JSON 字串寫法：
-            # import json
-            # key_dict = json.loads(st.secrets["gcp_service_account"]["info"])
-            
-            # 如果您在 secrets 裡是直接貼上 TOML 格式 (type = "...", project_id = "...")：
-            key_dict = st.secrets["gcp_service_account"]
-            
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
-        else:
-            # 如果找不到 secrets，嘗試讀取本機檔案 (本機開發用)
-            creds = ServiceAccountCredentials.from_json_keyfile_name('secrets.json', scope)
-            
-        client = gspread.authorize(creds)
-        return client
-    except Exception as e:
-        st.error(f"連線失敗: {e}")
-        return None
-
-def save_to_cloud(json_str):
-    client = get_cloud_connection()
-    if client:
-        try:
-            # 打開試算表 (請確保名稱正確且已共用給服務帳戶)
-            sheet = client.open("TripPlanDB").sheet1 
-            # 將資料寫入 A1 儲存格 (為了簡便，直接存整串 JSON)
-            sheet.update_cell(1, 1, json_str)
-            return True, "儲存成功！"
-        except Exception as e:
-            return False, f"寫入失敗: {e}"
-    else:
-        return False, "找不到 secrets.json 或連線失敗"
-
-def load_from_cloud():
-    client = get_cloud_connection()
-    if client:
-        try:
-            sheet = client.open("TripPlanDB").sheet1
-            # 從 A1 讀取
-            data_str = sheet.cell(1, 1).value
-            return data_str
-        except Exception as e:
-            return None
-    return None
-
-# ... (中間原本的程式碼保持不變) ...
-
-# ==========================================
-# 6. 實用工具 (修改版：加入雲端同步)
+# 6. 實用工具
 # ==========================================
 with tab6:
     st.header("🧰 實用工具")
     
-    # --- 新增：☁️ 雲端同步區塊 ---
+    # 1. 雲端同步
     st.subheader("☁️ 雲端共同編輯 (Google Sheets)")
-    st.caption("需先設定 Google API 才能使用。這能讓多人讀取同一份進度。")
+    with st.expander("設定說明", expanded=False):
+        st.caption("需在 GitHub 設定 secrets 才能使用。")
     
     col_cloud1, col_cloud2 = st.columns(2)
     
-    # 上傳至雲端
-    if col_cloud1.button("☁️ 上傳目前進度至雲端", use_container_width=True):
-        with st.spinner("正在連線至 Google Sheets..."):
-            # 準備資料
-            export_data = {
-                "trip_data": st.session_state.trip_data,
-                "checklist": st.session_state.checklist,
-                "wishlist": st.session_state.wishlist,
-                "hotel_info": st.session_state.hotel_info,
-                "flight_info": st.session_state.flight_info
-            }
-            json_str = json.dumps(export_data, default=str)
-            success, msg = save_to_cloud(json_str)
-            if success:
-                st.toast(f"✅ {msg}")
-            else:
-                st.error(msg)
+    if col_cloud1.button("☁️ 上傳進度", use_container_width=True):
+        if CLOUD_AVAILABLE:
+            with st.spinner("連線中..."):
+                export_data = {
+                    "trip_data": st.session_state.trip_data,
+                    "checklist": st.session_state.checklist,
+                    "wishlist": st.session_state.wishlist,
+                    "hotel_info": st.session_state.hotel_info,
+                    "flight_info": st.session_state.flight_info,
+                    "shopping_list": st.session_state.shopping_list.to_dict()
+                }
+                json_str = json.dumps(export_data, default=str)
+                success, msg = save_to_cloud(json_str)
+                if success:
+                    st.toast(f"✅ {msg}")
+                else:
+                    st.error(msg)
+        else:
+            st.error("雲端模組未安裝 (請檢查 requirements.txt)")
 
-    # 從雲端下載
-    if col_cloud2.button("📥 從雲端下載最新進度", use_container_width=True):
-        with st.spinner("正在讀取雲端資料..."):
-            cloud_data_str = load_from_cloud()
-            if cloud_data_str:
-                try:
-                    data = json.loads(cloud_data_str)
-                    # 恢復資料邏輯 (與匯入 JSON 相同)
-                    if "trip_data" in data:
-                        st.session_state.trip_data = {int(k): v for k, v in data["trip_data"].items()}
-                    if "checklist" in data: st.session_state.checklist = data["checklist"]
-                    if "wishlist" in data: st.session_state.wishlist = data["wishlist"]
-                    if "hotel_info" in data: st.session_state.hotel_info = data["hotel_info"]
-                    if "flight_info" in data: st.session_state.flight_info = data["flight_info"]
-                    st.toast("✅ 同步成功！已載入最新行程")
-                    time.sleep(1)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"資料解析失敗: {e}")
-            else:
-                st.error("無法讀取雲端資料，請檢查連線或檔案權限。")
+    if col_cloud2.button("📥 下載進度", use_container_width=True):
+        if CLOUD_AVAILABLE:
+            with st.spinner("讀取中..."):
+                cloud_data_str = load_from_cloud()
+                if cloud_data_str:
+                    try:
+                        data = json.loads(cloud_data_str)
+                        if "trip_data" in data:
+                            st.session_state.trip_data = {int(k): v for k, v in data["trip_data"].items()}
+                        if "checklist" in data: st.session_state.checklist = data["checklist"]
+                        if "wishlist" in data: st.session_state.wishlist = data["wishlist"]
+                        if "hotel_info" in data: st.session_state.hotel_info = data["hotel_info"]
+                        if "flight_info" in data: st.session_state.flight_info = data["flight_info"]
+                        if "shopping_list" in data: st.session_state.shopping_list = pd.DataFrame.from_dict(data["shopping_list"])
+                        st.toast("✅ 同步成功！")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"資料解析失敗: {e}")
+                else:
+                    st.error("讀取失敗或無資料")
+        else:
+            st.error("雲端模組未安裝")
 
     st.divider()
 
-    # ... (下方保留原本的 JSON 檔案匯出匯入、匯率計算、購物清單等功能) ...
-    # 1. 檔案備份 (JSON)
-    with st.expander("📂 本機檔案備份 (無須網路)", expanded=False):
-        # ... (原本的 JSON 下載/上傳代碼) ...
-    # 2. 匯率計算機
+    # 2. 檔案備份
+    with st.expander("📂 本機檔案備份 (JSON)", expanded=False):
+        export_data = {
+            "trip_data": st.session_state.trip_data,
+            "checklist": st.session_state.checklist,
+            "wishlist": st.session_state.wishlist,
+            "hotel_info": st.session_state.hotel_info,
+            "flight_info": st.session_state.flight_info
+        }
+        json_str = json.dumps(export_data, default=str, indent=4)
+        st.download_button("⬇️ 下載檔案", json_str, "my_trip.json", "application/json")
+        
+        up_file = st.file_uploader("⬆️ 上傳檔案", type=["json"])
+        if up_file:
+            try:
+                data = json.load(up_file)
+                if "trip_data" in data:
+                    st.session_state.trip_data = {int(k): v for k, v in data["trip_data"].items()}
+                if "checklist" in data: st.session_state.checklist = data["checklist"]
+                if "wishlist" in data: st.session_state.wishlist = data["wishlist"]
+                if "hotel_info" in data: st.session_state.hotel_info = data["hotel_info"]
+                if "flight_info" in data: st.session_state.flight_info = data["flight_info"]
+                st.toast("✅ 匯入成功")
+                time.sleep(1)
+                st.rerun()
+            except:
+                st.error("格式錯誤")
+
+    st.divider()
+
+    # 3. 匯率計算
     st.subheader("💴 匯率與退稅計算")
-    col_calc1, col_calc2 = st.columns(2)
-    amount = col_calc1.number_input("輸入外幣金額", min_value=0, step=100)
-    twd_val = amount * st.session_state.exchange_rate
-    col_calc2.metric("約合台幣", f"NT$ {int(twd_val):,}")
-    
-    if amount > 0:
-        tax_refund = amount / 1.1
-        refund_val = amount - tax_refund
-        st.caption(f"若為含稅價 (10%)，未稅價約為 {int(tax_refund):,}，可退稅額約 {int(refund_val):,}")
+    c_calc1, c_calc2 = st.columns(2)
+    amt = c_calc1.number_input("外幣金額", min_value=0, step=100)
+    twd = amt * st.session_state.exchange_rate
+    c_calc2.metric("約合台幣", f"NT$ {int(twd):,}")
+    if amt > 0:
+        st.caption(f"稅拔價(未稅)約: {int(amt/1.1):,} | 退稅額約: {int(amt - amt/1.1):,}")
 
     st.divider()
 
-    # 3. 購物清單
-    st.subheader("🛍️ 伴手禮與代購清單")
+    # 4. 購物清單
+    st.subheader("🛍️ 購物清單")
     if "shopping_list" not in st.session_state:
-        st.session_state.shopping_list = pd.DataFrame(columns=["對象", "商品名稱", "預算(¥)", "已購買"])
-
+        st.session_state.shopping_list = pd.DataFrame(columns=["對象", "商品", "預算", "已買"])
+    
     edited_df = st.data_editor(
         st.session_state.shopping_list,
         num_rows="dynamic",
         column_config={
-            "已購買": st.column_config.CheckboxColumn("已購買", help="買到了嗎？", default=False),
-            "預算(¥)": st.column_config.NumberColumn("預算(¥)", format="¥%d")
+            "已買": st.column_config.CheckboxColumn(default=False),
+            "預算": st.column_config.NumberColumn(format="¥%d")
         },
         use_container_width=True,
-        key="editor_shopping"
+        key="shop_editor"
     )
     
     if not edited_df.equals(st.session_state.shopping_list):
         st.session_state.shopping_list = edited_df
         st.rerun()
-
+    
     if not edited_df.empty:
-        total_shop_budget = edited_df["預算(¥)"].sum()
-        bought_count = edited_df["已購買"].sum()
+        total_shop_budget = edited_df["預算"].sum()
+        bought_count = edited_df["已買"].sum()
         st.caption(f"購物總預算: ¥{total_shop_budget:,} ｜ 進度: {bought_count}/{len(edited_df)}")
 
     st.divider()
 
-    # 4. SOS 求助卡
-    st.subheader("🆘 緊急求助卡")
-    sos_situations = {
-        "日本": {
-            "迷路": ("我想去這裡，請告訴我怎麼走。", "ここに行きたいです。行き方を教えてください。"),
-            "過敏": ("我有食物過敏。", "食物アレルギーがあります。"),
-            "受傷": ("我受傷了，請帶我去醫院。", "怪我をしました。病院に連れて行ってください。"),
-            "遺失": ("我的錢包/護照不見了。", "財布/パスポートをなくしました。"),
-            "飯店": ("請帶我去這家飯店。", "このホテルまでお願いします。")
-        },
-        "韓國": {
-            "迷路": ("我想去這裡，請告訴我怎麼走。", "여기로 가고 싶어요. 가는 방법을 알려주세요."),
-            "過敏": ("我有食物過敏。", "음식 알레르기가 있어요."),
-            "受傷": ("我受傷了，請帶我去醫院。", "다쳤어요. 병원으로 데려가 주세요."),
-            "遺失": ("我的護照不見了。", "여권을 잃어버렸어요."),
-            "飯店": ("請帶我去這家飯店。", "이 호텔로 가주세요.")
-        },
-        "泰國": {
-            "迷路": ("我想去這裡", "Yak bai tee nee"),
-            "過敏": ("我對海鮮過敏", "Phom/Chan pae a-han ta-lay"),
-            "受傷": ("送我去醫院", "Pa bai rong pa-ya-ban noi"),
-            "遺失": ("我護照不見了", "Nang sue doen tang hai"),
-            "飯店": ("去這家飯店", "Bai rong ram nee")
-        }
+    # 5. SOS 求助卡
+    st.subheader("🆘 緊急求助")
+    sos_map = {
+        "日本": {"迷路": "迷子になりました", "過敏": "アレルギーがあります", "醫院": "病院に連れて行って", "遺失": "財布/パスポートをなくしました"},
+        "韓國": {"迷路": "길을 잃었어요", "過敏": "알레르기가 있어요", "醫院": "병원으로 가주세요", "遺失": "여권을 잃어버렸어요"},
+        "泰國": {"迷路": "Long tang", "過敏": "Pae a-han", "醫院": "Bai rong paya ban", "遺失": "Nang sue doen tang hai"}
     }
+    # 修正變數名稱，確保正確讀取
+    target_country_sos = st.session_state.target_country
     
-    # 確保變數名稱正確，避免 NameError
-    target_country = st.session_state.target_country
-    if target_country in sos_situations:
-        sos_type = st.selectbox("緊急狀況類型", list(sos_situations[target_country].keys()))
-        sos_text = sos_situations[target_country][sos_type]
-        st.markdown(f"""<div style="background:#FF4B4B; color:white; padding:20px; border-radius:15px; text-align:center; box-shadow:0 4px 15px rgba(0,0,0,0.2);"><div style="font-size:1rem; opacity:0.9; margin-bottom:10px;">{sos_text[0]}</div><div style="font-size:1.8rem; font-weight:900; line-height:1.4;">{sos_text[1]}</div></div>""", unsafe_allow_html=True)
+    if target_country_sos in sos_map:
+        s_type = st.selectbox("緊急狀況", list(sos_map[target_country_sos].keys()))
+        s_txt = sos_map[target_country_sos][s_type]
+        st.markdown(f"<div style='background:#D32F2F; color:white; padding:20px; border-radius:10px; text-align:center; font-size:1.5rem; font-weight:bold;'>{s_txt}</div>", unsafe_allow_html=True)
     else:
-        st.info("目前僅支援 日/韓/泰 求助卡。")
-
+        st.info("目前僅支援 日/韓/泰")
+    
     st.divider()
-    
-    # 5. 旅遊會話
-    st.subheader("🗣️ 旅遊生存會話")
-    # 同樣使用正確的變數名稱 target_country
-    if target_country in SURVIVAL_PHRASES:
-        phrases = SURVIVAL_PHRASES[target_country]
-        cat_select = st.selectbox("選擇情境", list(phrases.keys()))
-        
-        for p in phrases[cat_select]:
-            st.markdown(f"""
-            <div class="apple-card" style="padding:15px; margin-bottom:10px;">
-                <div style="font-size:0.9rem; color:{current_theme['sub']};">{p[0]}</div>
-                <div style="font-size:1.2rem; font-weight:bold; color:{current_theme['text']};">{p[1]}</div>
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.info("目前僅支援 日/韓/泰 之會話。")
+
+    # 6. 會話
+    st.subheader("🗣️ 常用會話")
+    if target_country_sos in SURVIVAL_PHRASES:
+        phrases = SURVIVAL_PHRASES[target_country_sos]
+        cat = st.selectbox("情境", list(phrases.keys()))
+        for p in phrases[cat]:
+            st.markdown(f"""<div class="apple-card" style="padding:15px; margin-bottom:10px;"><div style="font-size:0.9rem; color:{current_theme['sub']};">{p[0]}</div><div style="font-size:1.2rem; font-weight:bold; color:{current_theme['text']};">{p[1]}</div></div>""", unsafe_allow_html=True)
